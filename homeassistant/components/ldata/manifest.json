@@ -1,0 +1,14 @@
+{
+  "domain": "ldata",
+  "name": "Leviton LDATA",
+  "codeowners": ["@rwoldberg"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/rwoldberg/ldata-ha",
+  "homekit": {},
+  "iot_class": "cloud_polling",
+  "issue_tracker": "https://github.com/rwoldberg/ldata-ha/issues",
+  "requirements": [],
+  "ssdp": [],
+  "zeroconf": []
+}
