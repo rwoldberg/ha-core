@@ -3,7 +3,7 @@ import logging
 
 from homeassistant.components.switch import SwitchEntity
 
-from .const import DOMAIN, SWITCHES
+from .const import DOMAIN
 from .ldata_entity import LDATAEntity
 
 _LOGGER = logging.getLogger(__name__)
@@ -14,9 +14,11 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
     entry = hass.data[DOMAIN][config_entry.entry_id]
 
-    for value in entry.data["breakers"]:
-        switch = LDATASwitch(entry, value)
-        async_add_entities([switch], True)
+    for breaker_id in entry.data["breakers"]:
+        breaker_data = entry.data["breakers"][breaker_id]
+        if breaker_data["model"] is not None and breaker_data["model"] != "":
+            switch = LDATASwitch(entry, breaker_data)
+            async_add_entities([switch])
 
 
 class LDATASwitch(LDATAEntity, SwitchEntity):
@@ -28,21 +30,16 @@ class LDATASwitch(LDATAEntity, SwitchEntity):
         self._state = None
 
     @property
-    def icon(self):
+    def icon(self) -> str:
         """Return the icon type."""
-        breaker_type = self.breaker_data["type"]
-        if type in SWITCHES:
-            return SWITCHES[breaker_type]["icon"]
-        _LOGGER.debug("Missing icon for type %s", breaker_type)
-        return None
+        return "mdi:electric-switch-closed"
 
     @property
     def is_on(self):
         """Returns true if the switch is on."""
-        for value in self.coordinator.data["breakers"]:
-            if value["id"] == self.breaker_data["id"]:
-                if value["state"] == "ManualON":
-                    self._state = True
+        if new_data := self.coordinator.data["breakers"][self.breaker_data["id"]]:
+            if new_data["state"] == "ManualON":
+                self._state = True
+            else:
                 self._state = False
-                break
         return self._state

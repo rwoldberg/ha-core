@@ -183,9 +183,9 @@ class LDATAService:
             return
         # Get the breaker panels.
         panels = self.get_panels()
-        result = {}
+        status_data = {}
         if panels is not None:
-            outputs = []
+            breakers = {}
             for panel in panels:
                 self.put_residential_breaker_panels(panel["id"])
                 self.firmware = panel["updateVersion"]
@@ -194,37 +194,37 @@ class LDATAService:
                 _LOGGER.debug(panel)
                 for breaker in panel["residentialBreakers"]:
                     _LOGGER.debug(breaker)
-                    outputdata = {}
-                    outputdata["rating"] = breaker["currentRating"]
-                    outputdata["position"] = breaker["position"]
-                    outputdata["name"] = breaker["name"]
-                    outputdata["state"] = breaker["currentState"]
-                    outputdata["id"] = breaker["id"]
-                    outputdata["model"] = breaker["model"]
-                    outputdata["power"] = float(breaker["power"]) + float(
-                        breaker["power2"]
-                    )
-                    outputdata["power1"] = float(breaker["power"])
-                    outputdata["power2"] = float(breaker["power2"])
-                    outputdata["poles"] = breaker["poles"]
-                    outputdata["type"] = "breaker"
-                    outputdata["serialNumber"] = breaker["serialNumber"]
-                    outputdata["voltage"] = float(breaker["rmsVoltage"]) + float(
-                        breaker["rmsVoltage2"]
-                    )
-                    outputdata["voltage1"] = float(breaker["rmsVoltage"])
-                    outputdata["voltage2"] = float(breaker["rmsVoltage2"])
-                    outputdata["frequency"] = float(breaker["lineFrequency"])
-                    outputdata["hardware"] = breaker["hwVersion"]
-                    outputdata["firmware"] = breaker["firmwareVersionMeter"]
-                    outputs.append(outputdata)
-            result["breakers"] = outputs
+                    if breaker["model"] is not None:
+                        breaker_data = {}
+                        breaker_data["rating"] = breaker["currentRating"]
+                        breaker_data["position"] = breaker["position"]
+                        breaker_data["name"] = breaker["name"]
+                        breaker_data["state"] = breaker["currentState"]
+                        breaker_data["id"] = breaker["id"]
+                        breaker_data["model"] = breaker["model"]
+                        breaker_data["power"] = float(breaker["power"]) + float(
+                            breaker["power2"]
+                        )
+                        breaker_data["power1"] = float(breaker["power"])
+                        breaker_data["power2"] = float(breaker["power2"])
+                        breaker_data["poles"] = breaker["poles"]
+                        breaker_data["serialNumber"] = breaker["serialNumber"]
+                        breaker_data["voltage"] = float(breaker["rmsVoltage"]) + float(
+                            breaker["rmsVoltage2"]
+                        )
+                        breaker_data["voltage1"] = float(breaker["rmsVoltage"])
+                        breaker_data["voltage2"] = float(breaker["rmsVoltage2"])
+                        breaker_data["frequency"] = float(breaker["lineFrequency"])
+                        breaker_data["hardware"] = breaker["hwVersion"]
+                        breaker_data["firmware"] = breaker["firmwareVersionMeter"]
+                        breakers[breaker["id"]] = breaker_data
+            status_data["breakers"] = breakers
 
         system = {}
         system["software"] = self.firmware
         system["model"] = self.model
         system["serialNumber"] = self.serialnumber
 
-        result["system"] = system
+        status_data["system"] = system
 
-        return result
+        return status_data

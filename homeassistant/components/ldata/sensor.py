@@ -26,11 +26,13 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
     entry = hass.data[DOMAIN][config_entry.entry_id]
 
-    for breaker in entry.data["breakers"]:
-        sensor = LDATATotalUsageSensor(entry, breaker)
-        async_add_entities([sensor], True)
-        sensor = LDATAPowerSensor(entry, breaker)
-        async_add_entities([sensor], True)
+    for breaker_id in entry.data["breakers"]:
+        breaker_data = entry.data["breakers"][breaker_id]
+        if breaker_data["model"] is not None and breaker_data["model"] != "":
+            sensor = LDATATotalUsageSensor(entry, breaker_data)
+            async_add_entities([sensor])
+            sensor = LDATAPowerSensor(entry, breaker_data)
+            async_add_entities([sensor])
 
 
 class LDATATotalUsageSensor(LDATAEntity, RestoreEntity, SensorEntity):
@@ -97,10 +99,8 @@ class LDATATotalUsageSensor(LDATAEntity, RestoreEntity, SensorEntity):
         current_date = dt.now()
         # Lookup the current value
         current_value = self.value
-        for breaker in self.coordinator.data["breakers"]:
-            if breaker["id"] == self.breaker_data["id"]:
-                current_value = self.breaker_data["power"]
-                break
+        if new_data := self.coordinator.data["breakers"][self.breaker_data["id"]]:
+            current_value = new_data["power"]
         # Only update if we have a previous update
         if self.last_update_time > 0:
             # Clear the running total if the last update date and now are not the same day
@@ -155,8 +155,6 @@ class LDATAPowerSensor(LDATAEntity, SensorEntity):
     @property
     def native_value(self) -> StateType:
         """Return the power value."""
-        for breaker in self.coordinator.data["breakers"]:
-            if breaker["id"] == self.breaker_data["id"]:
-                self.value = self.breaker_data["power"]
-                break
+        if new_data := self.coordinator.data["breakers"][self.breaker_data["id"]]:
+            self.value = new_data["power"]
         return round(cast(float, self.value), 2)

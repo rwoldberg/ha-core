@@ -14,9 +14,11 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
     entry = hass.data[DOMAIN][config_entry.entry_id]
 
-    for value in entry.data["breakers"]:
-        sensor = LDATABinarySensor(entry, value)
-        async_add_entities([sensor], True)
+    for breaker_id in entry.data["breakers"]:
+        breaker_data = entry.data["breakers"][breaker_id]
+        if breaker_data["model"] is not None and breaker_data["model"] != "":
+            sensor = LDATABinarySensor(entry, breaker_data)
+            async_add_entities([sensor])
 
 
 class LDATABinarySensor(LDATAEntity, BinarySensorEntity):
@@ -35,10 +37,9 @@ class LDATABinarySensor(LDATAEntity, BinarySensorEntity):
     @property
     def is_on(self):
         """Returns true if the breaker is on."""
-        for value in self.coordinator.data["breakers"]:
-            if value["id"] == self.breaker_data["id"]:
-                if value["state"] == "ManualON":
-                    self._state = True
+        if new_data := self.coordinator.data["breakers"][self.breaker_data["id"]]:
+            if new_data["state"] == "ManualON":
+                self._state = True
+            else:
                 self._state = False
-                break
         return self._state

@@ -3,10 +3,6 @@
 DOMAIN = "ldata"
 MANUFACTURER = "Leviton"
 
-SWITCHES = {
-    "breaker": {"icon": "mdi:electric-switch-closed"},
-}
-
 SENSORS = {
     "breaker": {"icon": "mdi:electric-switch-closed"},
     "amps": {"icon": "mdi:lightning-bolt-circle", "measurement": "A"},
