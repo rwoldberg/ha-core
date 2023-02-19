@@ -16,9 +16,8 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
     for breaker_id in entry.data["breakers"]:
         breaker_data = entry.data["breakers"][breaker_id]
-        if breaker_data["model"] is not None and breaker_data["model"] != "":
-            sensor = LDATABinarySensor(entry, breaker_data)
-            async_add_entities([sensor])
+        sensor = LDATABinarySensor(entry, breaker_data)
+        async_add_entities([sensor])
 
 
 class LDATABinarySensor(LDATAEntity, BinarySensorEntity):

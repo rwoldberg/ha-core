@@ -16,9 +16,8 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
     for breaker_id in entry.data["breakers"]:
         breaker_data = entry.data["breakers"][breaker_id]
-        if breaker_data["model"] is not None and breaker_data["model"] != "":
-            switch = LDATASwitch(entry, breaker_data)
-            async_add_entities([switch])
+        switch = LDATASwitch(entry, breaker_data)
+        async_add_entities([switch])
 
 
 class LDATASwitch(LDATAEntity, SwitchEntity):

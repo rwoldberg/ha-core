@@ -28,11 +28,10 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
 
     for breaker_id in entry.data["breakers"]:
         breaker_data = entry.data["breakers"][breaker_id]
-        if breaker_data["model"] is not None and breaker_data["model"] != "":
-            sensor = LDATATotalUsageSensor(entry, breaker_data)
-            async_add_entities([sensor])
-            sensor = LDATAPowerSensor(entry, breaker_data)
-            async_add_entities([sensor])
+        sensor = LDATATotalUsageSensor(entry, breaker_data)
+        async_add_entities([sensor])
+        sensor = LDATAPowerSensor(entry, breaker_data)
+        async_add_entities([sensor])
 
 
 class LDATATotalUsageSensor(LDATAEntity, RestoreEntity, SensorEntity):

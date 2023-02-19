@@ -194,7 +194,11 @@ class LDATAService:
                 _LOGGER.debug(panel)
                 for breaker in panel["residentialBreakers"]:
                     _LOGGER.debug(breaker)
-                    if breaker["model"] is not None:
+                    if (
+                        breaker["model"] is not None
+                        and breaker["model"] != "NONE-2"
+                        and breaker["model"] != "NONE-1"
+                    ):
                         breaker_data = {}
                         breaker_data["rating"] = breaker["currentRating"]
                         breaker_data["position"] = breaker["position"]
