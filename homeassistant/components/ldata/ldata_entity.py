@@ -9,7 +9,7 @@ from .ldata_uppdate_coordinator import LDATAUpdateCoordinator
 _LOGGER = logging.getLogger(__name__)
 
 
-class LDATAEntity(CoordinatorEntity):
+class LDATAEntity(CoordinatorEntity[LDATAUpdateCoordinator]):
     """Defines a base LDATA entity."""
 
     def __init__(self, data, coordinator: LDATAUpdateCoordinator) -> None:

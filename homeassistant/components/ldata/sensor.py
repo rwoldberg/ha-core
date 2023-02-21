@@ -1,16 +1,23 @@
 """Support for power sensors in LDATA devices."""
 from __future__ import annotations
 
+from dataclasses import dataclass
 import time
 from typing import cast
 
 from homeassistant.components.sensor import (
     SensorDeviceClass,
     SensorEntity,
+    SensorEntityDescription,
     SensorStateClass,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import UnitOfEnergy, UnitOfPower
+from homeassistant.const import (
+    UnitOfElectricCurrent,
+    UnitOfElectricPotential,
+    UnitOfEnergy,
+    UnitOfPower,
+)
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -21,6 +28,41 @@ from homeassistant.util import dt
 from .const import DATA_UPDATED, DOMAIN
 from .ldata_entity import LDATAEntity
 from .ldata_uppdate_coordinator import LDATAUpdateCoordinator
+
+
+@dataclass
+class SensorDescription(SensorEntityDescription):
+    """SensorEntityDescription for LDATA entities."""
+
+    unique_id_suffix: str | None = None
+
+
+SENSOR_TYPES = (
+    SensorDescription(
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        name="Watts",
+        key="power",
+        unique_id_suffix="_watts",
+    ),
+    SensorDescription(
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        name="Volts",
+        key="voltage",
+        unique_id_suffix="_volts",
+    ),
+    SensorDescription(
+        device_class=SensorDeviceClass.CURRENT,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
+        name="Amps",
+        key="current",
+        unique_id_suffix="_amps",
+    ),
+)
 
 
 async def async_setup_entry(
@@ -36,7 +78,11 @@ async def async_setup_entry(
         breaker_data = entry.data["breakers"][breaker_id]
         usage_sensor = LDATATotalUsageSensor(entry, breaker_data)
         async_add_entities([usage_sensor])
-        power_sensor = LDATAPowerSensor(entry, breaker_data)
+        power_sensor = LDATAPowerSensor(entry, breaker_data, SENSOR_TYPES[0])
+        async_add_entities([power_sensor])
+        power_sensor = LDATAPowerSensor(entry, breaker_data, SENSOR_TYPES[1])
+        async_add_entities([power_sensor])
+        power_sensor = LDATAPowerSensor(entry, breaker_data, SENSOR_TYPES[2])
         async_add_entities([power_sensor])
 
 
@@ -48,7 +94,7 @@ class LDATATotalUsageSensor(LDATAEntity, RestoreEntity, SensorEntity):
     _attr_native_unit_of_measurement = UnitOfEnergy.KILO_WATT_HOUR
 
     def __init__(self, coordinator: LDATAUpdateCoordinator, data) -> None:
-        """Init AttributeSensor."""
+        """Init sensor."""
         super().__init__(data=data, coordinator=coordinator)
         self._state = 0.0
         self.last_update_time = 0.0
@@ -77,6 +123,29 @@ class LDATATotalUsageSensor(LDATAEntity, RestoreEntity, SensorEntity):
         )
         # Subscribe to updates.
         self.async_on_remove(self.coordinator.async_add_listener(self._state_update))
+
+    @callback
+    def _schedule_immediate_update(self):
+        self.async_schedule_update_ha_state(True)
+
+    @property
+    def name_suffix(self) -> str | None:
+        """Suffix to append to the LDATA device's name."""
+        return "Total Daily Energy"
+
+    @property
+    def unique_id_suffix(self) -> str | None:
+        """Suffix to append to the LDATA device's unique ID."""
+        return "todaymw"
+
+    def convert_state(self, value: StateType) -> StateType:
+        """Convert native state to a value appropriate for the sensor."""
+        return round(cast(float, value), 2)
+
+    @property
+    def native_value(self) -> StateType:
+        """Return the used kilowatts of the device."""
+        return round(self._state, 2)
 
     @callback
     def _state_update(self):
@@ -108,60 +177,39 @@ class LDATATotalUsageSensor(LDATAEntity, RestoreEntity, SensorEntity):
             self.last_update_date = current_date
             self.async_write_ha_state()
 
-    @callback
-    def _schedule_immediate_update(self):
-        self.async_schedule_update_ha_state(True)
-
-    @property
-    def name_suffix(self) -> str | None:
-        """Suffix to append to the LDATA device's name."""
-        return "Total Daily Energy"
-
-    @property
-    def unique_id_suffix(self) -> str | None:
-        """Suffix to append to the LDATA device's unique ID."""
-        return "todaymw"
-
-    def convert_state(self, value: StateType) -> StateType:
-        """Convert native state to a value appropriate for the sensor."""
-        return round(cast(float, value), 2)
-
-    @property
-    def native_value(self) -> StateType:
-        """Return the used kilowatts of the device."""
-        return round(self._state, 2)
-
 
 class LDATAPowerSensor(LDATAEntity, SensorEntity):
     """Sensor that reads attributes of a LDATA device."""
 
-    _attr_state_class = SensorStateClass.MEASUREMENT
-    _attr_device_class = SensorDeviceClass.POWER
-    _attr_native_unit_of_measurement = UnitOfPower.WATT
+    entity_description: SensorDescription
 
-    def __init__(self, coordinator: LDATAUpdateCoordinator, data) -> None:
-        """Init AttributeSensor."""
+    def __init__(
+        self, coordinator: LDATAUpdateCoordinator, data, description: SensorDescription
+    ) -> None:
+        """Init sensor."""
+        self.entity_description = description
         super().__init__(data=data, coordinator=coordinator)
-        self._state = float(self.breaker_data["power"])
+        self._state = float(self.breaker_data[self.entity_description.key])
         # Subscribe to updates.
         self.async_on_remove(self.coordinator.async_add_listener(self._state_update))
 
     @callback
     def _state_update(self):
         """Call when the coordinator has an update."""
-        if new_data := self.coordinator.data["breakers"][self.breaker_data["id"]]:
-            self._state = new_data["power"]
-        self.async_write_ha_state()
+        if breakers := self.coordinator.data["breakers"]:
+            if new_data := breakers[self.breaker_data["id"]]:
+                self._state = new_data[self.entity_description.key]
+                self.async_write_ha_state()
 
     @property
     def name_suffix(self) -> str | None:
         """Suffix to append to the LDATA device's name."""
-        return "Watts"
+        return self.entity_description.name
 
     @property
     def unique_id_suffix(self) -> str | None:
         """Suffix to append to the LDATA device's unique ID."""
-        return "_watts"
+        return self.entity_description.unique_id_suffix
 
     def convert_state(self, value: StateType) -> StateType:
         """Convert native state to a value appropriate for the sensor."""

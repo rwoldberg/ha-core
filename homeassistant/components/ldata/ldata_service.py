@@ -240,10 +240,10 @@ class LDATAService:
                         breaker_data["voltage1"] = float(breaker["rmsVoltage"])
                         breaker_data["voltage2"] = float(breaker["rmsVoltage2"])
                         breaker_data["current"] = float(breaker["rmsCurrent"]) + float(
-                            breaker["rmsCurrent1"]
+                            breaker["rmsCurrent2"]
                         )
                         breaker_data["current1"] = float(breaker["rmsCurrent"])
-                        breaker_data["current2"] = float(breaker["rmsCurrent1"])
+                        breaker_data["current2"] = float(breaker["rmsCurrent2"])
                         breakers[breaker["id"]] = breaker_data
                         status_data["breakers"] = breakers
 
