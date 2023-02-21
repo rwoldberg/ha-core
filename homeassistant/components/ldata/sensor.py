@@ -9,9 +9,11 @@ from homeassistant.components.sensor import (
     SensorEntity,
     SensorStateClass,
 )
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import UnitOfEnergy, UnitOfPower
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.typing import StateType
 from homeassistant.util import dt
@@ -21,17 +23,21 @@ from .ldata_entity import LDATAEntity
 from .ldata_uppdate_coordinator import LDATAUpdateCoordinator
 
 
-async def async_setup_entry(hass, config_entry, async_add_entities):
+async def async_setup_entry(
+    hass: HomeAssistant,
+    config_entry: ConfigEntry,
+    async_add_entities: AddEntitiesCallback,
+) -> None:
     """Add the power and kilowatt sendors for the breakers."""
 
     entry = hass.data[DOMAIN][config_entry.entry_id]
 
     for breaker_id in entry.data["breakers"]:
         breaker_data = entry.data["breakers"][breaker_id]
-        sensor = LDATATotalUsageSensor(entry, breaker_data)
-        async_add_entities([sensor])
-        sensor = LDATAPowerSensor(entry, breaker_data)
-        async_add_entities([sensor])
+        usage_sensor = LDATATotalUsageSensor(entry, breaker_data)
+        async_add_entities([usage_sensor])
+        power_sensor = LDATAPowerSensor(entry, breaker_data)
+        async_add_entities([power_sensor])
 
 
 class LDATATotalUsageSensor(LDATAEntity, RestoreEntity, SensorEntity):
@@ -44,8 +50,7 @@ class LDATATotalUsageSensor(LDATAEntity, RestoreEntity, SensorEntity):
     def __init__(self, coordinator: LDATAUpdateCoordinator, data) -> None:
         """Init AttributeSensor."""
         super().__init__(data=data, coordinator=coordinator)
-        self.value = self.breaker_data["power"]
-        self.running_total = 0.0
+        self._state = 0.0
         self.last_update_time = 0.0
         self.previous_value = 0.0
         self.last_update_date = dt.now()
@@ -65,11 +70,43 @@ class LDATATotalUsageSensor(LDATAEntity, RestoreEntity, SensorEntity):
             and (last_update_date.year == current_date.year)
         ):
             if state.state is not None and state.state != "unknown":
-                self.running_total = self.running_total + float(state.state)
+                self._state = self._state + float(state.state)
 
         async_dispatcher_connect(
             self.hass, DATA_UPDATED, self._schedule_immediate_update
         )
+        # Subscribe to updates.
+        self.async_on_remove(self.coordinator.async_add_listener(self._state_update))
+
+    @callback
+    def _state_update(self):
+        """Call when the coordinator has an update."""
+        if new_data := self.coordinator.data["breakers"][self.breaker_data["id"]]:
+            current_value = new_data["power"]
+
+            # Save the current date and time
+            current_time = time.time()
+            current_date = dt.now()
+            # Only update if we have a previous update
+            if self.last_update_time > 0:
+                # Clear the running total if the last update date and now are not the same day
+                if (
+                    (self.last_update_date.day != current_date.day)
+                    or (self.last_update_date.month != current_date.month)
+                    or (self.last_update_date.year != current_date.year)
+                ):
+                    self._state = 0
+                # Power usage is hale the previous plus current power consumption in kilowatts
+                power = ((self.previous_value + current_value) / 2) / 1000
+                # How long has it been since the last update in hours
+                time_span = (current_time - self.last_update_time) / 3600
+                # Update our running total
+                self._state = self._state + (power * time_span)
+            # Save the current values
+            self.last_update_time = current_time
+            self.previous_value = current_value
+            self.last_update_date = current_date
+            self.async_write_ha_state()
 
     @callback
     def _schedule_immediate_update(self):
@@ -92,37 +129,7 @@ class LDATATotalUsageSensor(LDATAEntity, RestoreEntity, SensorEntity):
     @property
     def native_value(self) -> StateType:
         """Return the used kilowatts of the device."""
-
-        # Save the current date and time
-        current_time = time.time()
-        current_date = dt.now()
-        # Lookup the current value
-        current_value = self.value
-        if new_data := self.coordinator.data["breakers"][self.breaker_data["id"]]:
-            current_value = new_data["power"]
-        # Only update if we have a previous update
-        if self.last_update_time > 0:
-            # Clear the running total if the last update date and now are not the same day
-            if (
-                (self.last_update_date.day != current_date.day)
-                or (self.last_update_date.month != current_date.month)
-                or (self.last_update_date.year != current_date.year)
-            ):
-                self.running_total = 0
-            # Power usage is hale the previous plus current power consumption in kilowatts
-            power = ((self.previous_value + current_value) / 2) / 1000
-            # How long has it been since the last update in hours
-            time_span = (current_time - self.last_update_time) / 3600
-            # Update our running total
-            self.running_total = self.running_total + (power * time_span)
-        else:
-            self.previous_value = current_value
-        # Save the current values
-        self.last_update_time = current_time
-        self.previous_value = current_value
-        self.last_update_date = current_date
-        # Return the new running total
-        return round(self.running_total, 2)
+        return round(self._state, 2)
 
 
 class LDATAPowerSensor(LDATAEntity, SensorEntity):
@@ -135,7 +142,16 @@ class LDATAPowerSensor(LDATAEntity, SensorEntity):
     def __init__(self, coordinator: LDATAUpdateCoordinator, data) -> None:
         """Init AttributeSensor."""
         super().__init__(data=data, coordinator=coordinator)
-        self.value = self.breaker_data["power"]
+        self._state = float(self.breaker_data["power"])
+        # Subscribe to updates.
+        self.async_on_remove(self.coordinator.async_add_listener(self._state_update))
+
+    @callback
+    def _state_update(self):
+        """Call when the coordinator has an update."""
+        if new_data := self.coordinator.data["breakers"][self.breaker_data["id"]]:
+            self._state = new_data["power"]
+        self.async_write_ha_state()
 
     @property
     def name_suffix(self) -> str | None:
@@ -154,6 +170,4 @@ class LDATAPowerSensor(LDATAEntity, SensorEntity):
     @property
     def native_value(self) -> StateType:
         """Return the power value."""
-        if new_data := self.coordinator.data["breakers"][self.breaker_data["id"]]:
-            self.value = new_data["power"]
-        return round(cast(float, self.value), 2)
+        return round(self._state, 2)
