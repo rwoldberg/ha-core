@@ -19,7 +19,7 @@ class LDATAUpdateCoordinator(DataUpdateCoordinator):
         """Initialize the coordinator and set up the Controller object."""
         self._hass = hass
         self.user = user
-        self.service = LDATAService(user, password)
+        self._service = LDATAService(user, password)
         self._available = True
 
         super().__init__(
@@ -34,7 +34,7 @@ class LDATAUpdateCoordinator(DataUpdateCoordinator):
         try:
             async with async_timeout.timeout(30):
                 data = await self._hass.async_add_executor_job(
-                    self.service.status  # Fetch new status
+                    self._service.status  # Fetch new status
                 )
                 return data
         except Exception as ex:
@@ -44,3 +44,8 @@ class LDATAUpdateCoordinator(DataUpdateCoordinator):
             raise UpdateFailed(
                 f"Error communicating with LDATA for {self.user}"
             ) from ex
+
+    @property
+    def service(self) -> LDATAService:
+        """Return the LDATA service."""
+        return self._service

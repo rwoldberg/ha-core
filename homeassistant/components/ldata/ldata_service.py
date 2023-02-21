@@ -160,6 +160,24 @@ class LDATAService:
             timeout=15,
         )
 
+    def turn_off(self, breaker_id):
+        """Turn off a breaker."""
+        # Call PUT on the ResidentialBreakerPanels/{breaker_id}.  The data is remoteTrip set to true, this will trip the breaker.
+        url = f"https://my.leviton.com/api/ResidentialBreakers/{breaker_id}"
+        headers = {**defaultHeaders}
+        headers["authorization"] = self.auth_token
+        headers[
+            "referer"
+        ] = f"https://my.leviton.com/home/residential-breakers/{breaker_id}/settings"
+        data = {"remoteTrip": True}
+        result = requests.put(
+            url,
+            headers=headers,
+            json=data,
+            timeout=15,
+        )
+        return result
+
     def status(self):
         """Get the breakers from the API."""
         _LOGGER.debug(self.auth_token)
@@ -206,23 +224,28 @@ class LDATAService:
                         breaker_data["state"] = breaker["currentState"]
                         breaker_data["id"] = breaker["id"]
                         breaker_data["model"] = breaker["model"]
+                        breaker_data["poles"] = breaker["poles"]
+                        breaker_data["serialNumber"] = breaker["serialNumber"]
+                        breaker_data["frequency"] = float(breaker["lineFrequency"])
+                        breaker_data["hardware"] = breaker["hwVersion"]
+                        breaker_data["firmware"] = breaker["firmwareVersionMeter"]
                         breaker_data["power"] = float(breaker["power"]) + float(
                             breaker["power2"]
                         )
                         breaker_data["power1"] = float(breaker["power"])
                         breaker_data["power2"] = float(breaker["power2"])
-                        breaker_data["poles"] = breaker["poles"]
-                        breaker_data["serialNumber"] = breaker["serialNumber"]
                         breaker_data["voltage"] = float(breaker["rmsVoltage"]) + float(
                             breaker["rmsVoltage2"]
                         )
                         breaker_data["voltage1"] = float(breaker["rmsVoltage"])
                         breaker_data["voltage2"] = float(breaker["rmsVoltage2"])
-                        breaker_data["frequency"] = float(breaker["lineFrequency"])
-                        breaker_data["hardware"] = breaker["hwVersion"]
-                        breaker_data["firmware"] = breaker["firmwareVersionMeter"]
+                        breaker_data["current"] = float(breaker["rmsCurrent"]) + float(
+                            breaker["rmsCurrent1"]
+                        )
+                        breaker_data["current1"] = float(breaker["rmsCurrent"])
+                        breaker_data["current2"] = float(breaker["rmsCurrent1"])
                         breakers[breaker["id"]] = breaker_data
-            status_data["breakers"] = breakers
+                        status_data["breakers"] = breakers
 
         system = {}
         system["software"] = self.firmware

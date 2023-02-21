@@ -1,5 +1,6 @@
 """Switch support for an LDATA devices."""
 import logging
+from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
@@ -34,6 +35,9 @@ class LDATASwitch(LDATAEntity, SwitchEntity):
         """Init LDATASwitch."""
         super().__init__(data=data, coordinator=coordinator)
         self._state = None
+        if current_data := self.coordinator.data["breakers"][self.breaker_data["id"]]:
+            if current_data["state"] == "ManualON":
+                self._state = True
         # Subscribe to updates.
         self.async_on_remove(self.coordinator.async_add_listener(self._state_update))
 
@@ -50,9 +54,21 @@ class LDATASwitch(LDATAEntity, SwitchEntity):
     @property
     def icon(self) -> str:
         """Return the icon type."""
+        if self.is_on is True:
+            return "mdi:electric-switch-open"
         return "mdi:electric-switch-closed"
 
     @property
     def is_on(self) -> bool | None:
         """Returns true if the switch is on."""
         return self._state
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Trip the breaker."""
+        await self.coordinator.hass.async_add_executor_job(
+            self.coordinator.service.turn_off, self.breaker_data["id"]
+        )
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Reset the breaker."""
+        _LOGGER.debug("turn_on is not supported!")

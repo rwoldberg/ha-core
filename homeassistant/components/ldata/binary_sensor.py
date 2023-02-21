@@ -34,6 +34,9 @@ class LDATABinarySensor(LDATAEntity, BinarySensorEntity):
         """Init LDATABinarySensor."""
         super().__init__(data=data, coordinator=coordinator)
         self._state = None
+        if current_data := self.coordinator.data["breakers"][self.breaker_data["id"]]:
+            if current_data["state"] == "ManualON":
+                self._state = True
         # Subscribe to updates.
         self.async_on_remove(self.coordinator.async_add_listener(self._state_update))
 

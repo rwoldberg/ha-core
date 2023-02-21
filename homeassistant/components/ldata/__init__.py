@@ -13,7 +13,7 @@ from homeassistant.helpers.typing import ConfigType
 from .const import DOMAIN, UPDATE_INTERVAL, UPDATE_INTERVAL_DEFAULT
 from .ldata_uppdate_coordinator import LDATAUpdateCoordinator
 
-PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.SENSOR]
+PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.SENSOR, Platform.SWITCH]
 
 _LOGGER = logging.getLogger(__name__)
 

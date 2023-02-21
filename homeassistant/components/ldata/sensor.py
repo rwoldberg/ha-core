@@ -28,7 +28,7 @@ async def async_setup_entry(
     config_entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Add the power and kilowatt sendors for the breakers."""
+    """Add the power and kilowatt sensors for the breakers."""
 
     entry = hass.data[DOMAIN][config_entry.entry_id]
 
