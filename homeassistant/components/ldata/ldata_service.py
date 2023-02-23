@@ -205,7 +205,7 @@ class LDATAService:
             for panel in panels_html:
                 self.put_residential_breaker_panels(panel["id"])
                 panel_data = {}
-                panel_data["updateVersion"] = panel["updateVersion"]
+                panel_data["firmware"] = panel["updateVersion"]
                 panel_data["model"] = panel["model"]
                 panel_data["id"] = panel["id"]
                 panel_data["name"] = panel["name"]

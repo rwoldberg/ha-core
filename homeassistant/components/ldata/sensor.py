@@ -99,7 +99,7 @@ async def async_setup_entry(
         entity_data["serialNumber"] = panel["serialNumber"]
         entity_data["model"] = panel["model"]
         entity_data["hardware"] = "LDATA"
-        entity_data["firmware"] = panel["software"]
+        entity_data["firmware"] = panel["firmware"]
         total_sensor = LDATATotalUsageSensor(
             entry, entity_data, SENSOR_TYPES[0], average=False
         )
