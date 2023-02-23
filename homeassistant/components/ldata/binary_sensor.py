@@ -33,6 +33,7 @@ class LDATABinarySensor(LDATAEntity, BinarySensorEntity):
     def __init__(self, coordinator, data) -> None:
         """Init LDATABinarySensor."""
         super().__init__(data=data, coordinator=coordinator)
+        self.breaker_data = data
         self._state = None
         if current_data := self.coordinator.data["breakers"][self.breaker_data["id"]]:
             if current_data["state"] == "ManualON":

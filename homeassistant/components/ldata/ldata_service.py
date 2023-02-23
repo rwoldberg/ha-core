@@ -26,9 +26,6 @@ class LDATAService:
         self.userid = ""
         self.account_id = ""
         self.residence_id = ""
-        self.firmware = ""
-        self.model = ""
-        self.serialnumber = ""
 
     def clear_tokens(self) -> None:
         """Clear the tokens to force a re-login."""
@@ -200,15 +197,20 @@ class LDATAService:
         if self.residence_id is None or self.residence_id == "":
             return
         # Get the breaker panels.
-        panels = self.get_panels()
+        panels_html = self.get_panels()
         status_data = {}
-        if panels is not None:
-            breakers = {}
-            for panel in panels:
+        breakers = {}
+        panels = []
+        if panels_html is not None:
+            for panel in panels_html:
                 self.put_residential_breaker_panels(panel["id"])
-                self.firmware = panel["updateVersion"]
-                self.model = panel["model"]
-                self.serialnumber = panel["id"]
+                panel_data = {}
+                panel_data["updateVersion"] = panel["updateVersion"]
+                panel_data["model"] = panel["model"]
+                panel_data["id"] = panel["id"]
+                panel_data["name"] = panel["name"]
+                panel_data["serialNumber"] = panel["id"]
+                panels.append(panel_data)
                 _LOGGER.debug(panel)
                 for breaker in panel["residentialBreakers"]:
                     _LOGGER.debug(breaker)
@@ -232,26 +234,32 @@ class LDATAService:
                         breaker_data["power"] = float(breaker["power"]) + float(
                             breaker["power2"]
                         )
-                        breaker_data["power1"] = float(breaker["power"])
-                        breaker_data["power2"] = float(breaker["power2"])
                         breaker_data["voltage"] = float(breaker["rmsVoltage"]) + float(
                             breaker["rmsVoltage2"]
                         )
-                        breaker_data["voltage1"] = float(breaker["rmsVoltage"])
-                        breaker_data["voltage2"] = float(breaker["rmsVoltage2"])
                         breaker_data["current"] = float(breaker["rmsCurrent"]) + float(
                             breaker["rmsCurrent2"]
                         )
-                        breaker_data["current1"] = float(breaker["rmsCurrent"])
-                        breaker_data["current2"] = float(breaker["rmsCurrent2"])
+                        if int(breaker["position"]) & 1 == 1:
+                            breaker_data["leg"] = 1
+                            breaker_data["power1"] = float(breaker["power"])
+                            breaker_data["power2"] = float(breaker["power2"])
+                            breaker_data["voltage1"] = float(breaker["rmsVoltage"])
+                            breaker_data["voltage2"] = float(breaker["rmsVoltage2"])
+                            breaker_data["current1"] = float(breaker["rmsCurrent"])
+                            breaker_data["current2"] = float(breaker["rmsCurrent2"])
+                        else:
+                            breaker_data["leg"] = 2
+                            breaker_data["power1"] = float(breaker["power2"])
+                            breaker_data["power2"] = float(breaker["power"])
+                            breaker_data["voltage1"] = float(breaker["rmsVoltage2"])
+                            breaker_data["voltage2"] = float(breaker["rmsVoltage"])
+                            breaker_data["current1"] = float(breaker["rmsCurrent2"])
+                            breaker_data["current2"] = float(breaker["rmsCurrent"])
+                        # Add the breaker to the list.
                         breakers[breaker["id"]] = breaker_data
-                        status_data["breakers"] = breakers
 
-        system = {}
-        system["software"] = self.firmware
-        system["model"] = self.model
-        system["serialNumber"] = self.serialnumber
-
-        status_data["system"] = system
+        status_data["breakers"] = breakers
+        status_data["panels"] = panels
 
         return status_data

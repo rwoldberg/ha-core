@@ -4,6 +4,7 @@ import logging
 
 import async_timeout
 
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import DOMAIN
@@ -15,7 +16,7 @@ _LOGGER = logging.getLogger(__name__)
 class LDATAUpdateCoordinator(DataUpdateCoordinator):
     """LDATAUpdateCoordinator to handle fetching new data about the LDATA module."""
 
-    def __init__(self, hass, user, password, update_interval):
+    def __init__(self, hass: HomeAssistant, user, password, update_interval) -> None:
         """Initialize the coordinator and set up the Controller object."""
         self._hass = hass
         self.user = user

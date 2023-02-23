@@ -16,12 +16,12 @@ class LDATAEntity(CoordinatorEntity[LDATAUpdateCoordinator]):
         """Initialize the entity."""
         super().__init__(coordinator)
         self.coordinator = coordinator
-        self.breaker_data = data
-        self._device_id = "ldata_" + self.breaker_data["id"]
+        self.entity_data = data
+        self._device_id = "ldata_" + self.entity_data["id"]
         if suffix := self.name_suffix:
-            self._name = self.breaker_data["name"] + " " + suffix
+            self._name = self.entity_data["name"] + " " + suffix
         else:
-            self._name = self.breaker_data["name"]
+            self._name = self.entity_data["name"]
         # Required for HA 2022.7
         self.coordinator_context = object()
 
@@ -65,18 +65,12 @@ class LDATAEntity(CoordinatorEntity[LDATAUpdateCoordinator]):
             return None
 
         info = {
-            "identifiers": {(DOMAIN, self.breaker_data["serialNumber"])},
-            "name": self.breaker_data["name"],
-            "model": self.breaker_data["model"],
-            "hw_version": self.breaker_data["hardware"],
-            "sw_version": self.breaker_data["firmware"],
-            "manufacturer": MANUFACTURER
-            # "identifiers": {(DOMAIN, self.coordinator.data["system"]["serialNumber"])},
-            # "name": f"LDATA ({self.coordinator.user})",
-            # "model": self.coordinator.data["system"]["model"],
-            # "sw_version": self.coordinator.data["system"]["software"],
-            # "manufacturer": MANUFACTURER,
-            # "test": "TEST",
+            "identifiers": {(DOMAIN, self.entity_data["serialNumber"])},
+            "name": self.entity_data["name"],
+            "model": self.entity_data["model"],
+            "hw_version": self.entity_data["hardware"],
+            "sw_version": self.entity_data["firmware"],
+            "manufacturer": MANUFACTURER,
         }
 
         return info
