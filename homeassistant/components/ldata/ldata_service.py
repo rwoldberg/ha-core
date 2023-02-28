@@ -210,6 +210,11 @@ class LDATAService:
                 panel_data["id"] = panel["id"]
                 panel_data["name"] = panel["name"]
                 panel_data["serialNumber"] = panel["id"]
+                panel_data["voltage"] = (
+                    float(panel["rmsVoltage"]) + float(panel["rmsVoltage2"])
+                ) / 2.0
+                panel_data["voltage1"] = float(panel["rmsVoltage"])
+                panel_data["voltage2"] = float(panel["rmsVoltage2"])
                 panels.append(panel_data)
                 _LOGGER.debug(panel)
                 for breaker in panel["residentialBreakers"]:
@@ -228,7 +233,6 @@ class LDATAService:
                         breaker_data["model"] = breaker["model"]
                         breaker_data["poles"] = breaker["poles"]
                         breaker_data["serialNumber"] = breaker["serialNumber"]
-                        breaker_data["frequency"] = float(breaker["lineFrequency"])
                         breaker_data["hardware"] = breaker["hwVersion"]
                         breaker_data["firmware"] = breaker["firmwareVersionMeter"]
                         breaker_data["power"] = float(breaker["power"]) + float(
@@ -240,6 +244,13 @@ class LDATAService:
                         breaker_data["current"] = float(breaker["rmsCurrent"]) + float(
                             breaker["rmsCurrent2"]
                         )
+                        if breaker["poles"] == 2:
+                            breaker_data["frequency"] = (
+                                float(breaker["lineFrequency"])
+                                + float(breaker["lineFrequency2"])
+                            ) / 2.0
+                        else:
+                            breaker_data["frequency"] = float(breaker["lineFrequency"])
                         if int(breaker["position"]) & 1 == 1:
                             breaker_data["leg"] = 1
                             breaker_data["power1"] = float(breaker["power"])
@@ -248,6 +259,10 @@ class LDATAService:
                             breaker_data["voltage2"] = float(breaker["rmsVoltage2"])
                             breaker_data["current1"] = float(breaker["rmsCurrent"])
                             breaker_data["current2"] = float(breaker["rmsCurrent2"])
+                            breaker_data["frequency1"] = float(breaker["lineFrequency"])
+                            breaker_data["frequency2"] = float(
+                                breaker["lineFrequency2"]
+                            )
                         else:
                             breaker_data["leg"] = 2
                             breaker_data["power1"] = float(breaker["power2"])
@@ -256,6 +271,10 @@ class LDATAService:
                             breaker_data["voltage2"] = float(breaker["rmsVoltage"])
                             breaker_data["current1"] = float(breaker["rmsCurrent2"])
                             breaker_data["current2"] = float(breaker["rmsCurrent"])
+                            breaker_data["frequency1"] = float(
+                                breaker["lineFrequency2"]
+                            )
+                            breaker_data["frequency2"] = float(breaker["lineFrequency"])
                         # Add the breaker to the list.
                         breakers[breaker["id"]] = breaker_data
 

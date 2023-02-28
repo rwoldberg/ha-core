@@ -38,7 +38,7 @@ class SensorDescription(SensorEntityDescription):
 
 
 SENSOR_TYPES = (
-    SensorDescription(
+    SensorDescription(  # index=0
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfPower.WATT,
@@ -46,7 +46,7 @@ SENSOR_TYPES = (
         key="power",
         unique_id_suffix="_watts",
     ),
-    SensorDescription(
+    SensorDescription(  # index=1
         device_class=SensorDeviceClass.VOLTAGE,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfElectricPotential.VOLT,
@@ -54,7 +54,7 @@ SENSOR_TYPES = (
         key="voltage",
         unique_id_suffix="_volts",
     ),
-    SensorDescription(
+    SensorDescription(  # index=2
         device_class=SensorDeviceClass.CURRENT,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfElectricCurrent.AMPERE,
@@ -62,7 +62,7 @@ SENSOR_TYPES = (
         key="current",
         unique_id_suffix="_amps",
     ),
-    SensorDescription(
+    SensorDescription(  # index=3
         device_class=SensorDeviceClass.FREQUENCY,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfFrequency.HERTZ,
@@ -92,6 +92,8 @@ async def async_setup_entry(
         async_add_entities([power_sensor])
         power_sensor = LDATAOutputSensor(entry, breaker_data, SENSOR_TYPES[2])
         async_add_entities([power_sensor])
+        power_sensor = LDATAOutputSensor(entry, breaker_data, SENSOR_TYPES[3])
+        async_add_entities([power_sensor])
     for panel in entry.data["panels"]:
         entity_data = {}
         entity_data["id"] = panel["serialNumber"]
@@ -106,6 +108,10 @@ async def async_setup_entry(
         async_add_entities([total_sensor])
         total_sensor = LDATATotalUsageSensor(
             entry, entity_data, SENSOR_TYPES[2], average=False
+        )
+        async_add_entities([total_sensor])
+        total_sensor = LDATATotalUsageSensor(
+            entry, entity_data, SENSOR_TYPES[3], average=True
         )
         async_add_entities([total_sensor])
         total_sensor = LDATATotalUsageSensor(

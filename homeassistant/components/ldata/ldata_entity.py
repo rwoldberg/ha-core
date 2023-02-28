@@ -74,3 +74,19 @@ class LDATAEntity(CoordinatorEntity[LDATAUpdateCoordinator]):
         }
 
         return info
+
+    @property
+    def extra_state_attributes(self) -> dict[str, str]:
+        """Returns the extra attributes for the breaker."""
+        attributes = {}
+        if "poles" in self.entity_data:
+            if int(self.entity_data["poles"]) == 2:
+                attributes["leg"] = "both"
+            elif int(self.entity_data["position"]) & 1 == 1:
+                attributes["leg"] = "1"
+            else:
+                attributes["leg"] = "2"
+        else:
+            attributes["leg"] = "both"
+
+        return attributes
