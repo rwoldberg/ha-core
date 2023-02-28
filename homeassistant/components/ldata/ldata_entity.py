@@ -3,7 +3,7 @@ import logging
 
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, MANUFACTURER
+from .const import _LEG1_POSITIONS, DOMAIN, MANUFACTURER
 from .ldata_uppdate_coordinator import LDATAUpdateCoordinator
 
 _LOGGER = logging.getLogger(__name__)
@@ -22,6 +22,15 @@ class LDATAEntity(CoordinatorEntity[LDATAUpdateCoordinator]):
             self._name = self.entity_data["name"] + " " + suffix
         else:
             self._name = self.entity_data["name"]
+        if "poles" in self.entity_data and "position" in self.entity_data:
+            if int(self.entity_data["poles"]) == 2:
+                self.leg = "both"
+            elif self.entity_data["position"] in _LEG1_POSITIONS:
+                self.leg = "1"
+            else:
+                self.leg = "2"
+        else:
+            self.leg = "both"
         # Required for HA 2022.7
         self.coordinator_context = object()
 
@@ -79,14 +88,6 @@ class LDATAEntity(CoordinatorEntity[LDATAUpdateCoordinator]):
     def extra_state_attributes(self) -> dict[str, str]:
         """Returns the extra attributes for the breaker."""
         attributes = {}
-        if "poles" in self.entity_data:
-            if int(self.entity_data["poles"]) == 2:
-                attributes["leg"] = "both"
-            elif int(self.entity_data["position"]) & 1 == 1:
-                attributes["leg"] = "1"
-            else:
-                attributes["leg"] = "2"
-        else:
-            attributes["leg"] = "both"
+        attributes["leg"] = self.leg
 
         return attributes
