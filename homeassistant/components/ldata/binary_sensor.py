@@ -44,13 +44,16 @@ class LDATABinarySensor(LDATAEntity, BinarySensorEntity):
     @callback
     def _state_update(self):
         """Call when the coordinator has an update."""
-        if breakers := self.coordinator.data["breakers"]:
-            if new_data := breakers[self.breaker_data["id"]]:
-                if new_data["state"] == "ManualON":
-                    self._state = True
-                else:
-                    self._state = False
-                self.async_write_ha_state()
+        try:
+            if breakers := self.coordinator.data["breakers"]:
+                if new_data := breakers[self.breaker_data["id"]]:
+                    if new_data["state"] == "ManualON":
+                        self._state = True
+                    else:
+                        self._state = False
+        except Exception:  # pylint: disable=broad-except
+            self._state = None
+        self.async_write_ha_state()
 
     @property
     def extra_state_attributes(self) -> dict[str, str]:
@@ -64,6 +67,7 @@ class LDATABinarySensor(LDATAEntity, BinarySensorEntity):
         attributes["serialNumber"] = self.breaker_data["serialNumber"]
         attributes["hardware"] = self.breaker_data["hardware"]
         attributes["firmware"] = self.breaker_data["firmware"]
+        attributes["panel_id"] = self.breaker_data["panel_id"]
 
         return attributes
 
