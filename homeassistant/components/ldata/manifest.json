@@ -7,5 +7,6 @@
   "documentation": "https://github.com/rwoldberg/ldata-ha",
   "iot_class": "cloud_polling",
   "issue_tracker": "https://github.com/rwoldberg/ldata-ha/issues",
+  "loggers": ["ldata"],
   "requirements": []
 }
