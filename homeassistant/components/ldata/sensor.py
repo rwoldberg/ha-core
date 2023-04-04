@@ -1,6 +1,7 @@
 """Support for power sensors in LDATA devices."""
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass
 import logging
 import time
@@ -105,6 +106,7 @@ async def async_setup_entry(
         entity_data["model"] = panel["model"]
         entity_data["hardware"] = "LDATA"
         entity_data["firmware"] = panel["firmware"]
+        entity_data["poles"] = 2
         total_sensor = LDATATotalUsageSensor(
             entry, entity_data, SENSOR_TYPES[0], average=False, which_leg="both"
         )
@@ -117,16 +119,21 @@ async def async_setup_entry(
             entry, entity_data, SENSOR_TYPES[3], average=True, which_leg="both"
         )
         async_add_entities([total_sensor])
+        entity_data = copy.deepcopy(entity_data)
+        entity_data["poles"] = 1
+        entity_data["position"] = 1
         total_sensor = LDATATotalUsageSensor(
             entry, entity_data, SENSOR_TYPES[0], average=False, which_leg="1"
         )
         async_add_entities([total_sensor])
         total_sensor = LDATATotalUsageSensor(
-            entry, entity_data, SENSOR_TYPES[0], average=False, which_leg="2"
+            entry, entity_data, SENSOR_TYPES[2], average=False, which_leg="1"
         )
         async_add_entities([total_sensor])
+        entity_data = copy.deepcopy(entity_data)
+        entity_data["position"] = 3
         total_sensor = LDATATotalUsageSensor(
-            entry, entity_data, SENSOR_TYPES[2], average=False, which_leg="1"
+            entry, entity_data, SENSOR_TYPES[0], average=False, which_leg="2"
         )
         async_add_entities([total_sensor])
         total_sensor = LDATATotalUsageSensor(

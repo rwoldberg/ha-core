@@ -15,6 +15,8 @@ SENSORS = {
 UPDATE_INTERVAL = "update_interval"
 UPDATE_INTERVAL_DEFAULT = 60
 DATA_UPDATED = "ldata_data_updated"
+THREE_PHASE = "three_phase"
+THREE_PHASE_DEFAULT = False
 
 _LEG1_POSITIONS = [
     1,
