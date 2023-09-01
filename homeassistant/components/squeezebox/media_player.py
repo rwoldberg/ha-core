@@ -35,7 +35,7 @@ from homeassistant.helpers import (
     entity_platform,
 )
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.device_registry import format_mac
+from homeassistant.helpers.device_registry import DeviceInfo, format_mac
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
     async_dispatcher_send,
@@ -234,7 +234,10 @@ class SqueezeBoxEntity(MediaPlayerEntity):
         | MediaPlayerEntityFeature.CLEAR_PLAYLIST
         | MediaPlayerEntityFeature.STOP
         | MediaPlayerEntityFeature.GROUPING
+        | MediaPlayerEntityFeature.MEDIA_ENQUEUE
     )
+    _attr_has_entity_name = True
+    _attr_name = None
 
     def __init__(self, player):
         """Initialize the SqueezeBox device."""
@@ -243,6 +246,10 @@ class SqueezeBoxEntity(MediaPlayerEntity):
         self._query_result = {}
         self._available = True
         self._remove_dispatcher = None
+        self._attr_unique_id = format_mac(self._player.player_id)
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, self._attr_unique_id)}, name=self._player.name
+        )
 
     @property
     def extra_state_attributes(self):
@@ -254,16 +261,6 @@ class SqueezeBoxEntity(MediaPlayerEntity):
         }
 
         return squeezebox_attr
-
-    @property
-    def name(self):
-        """Return the name of the device."""
-        return self._player.name
-
-    @property
-    def unique_id(self):
-        """Return a unique ID."""
-        return format_mac(self._player.player_id)
 
     @property
     def available(self):
@@ -469,7 +466,7 @@ class SqueezeBoxEntity(MediaPlayerEntity):
         await self._player.async_set_power(True)
 
     async def async_play_media(
-        self, media_type: str, media_id: str, **kwargs: Any
+        self, media_type: MediaType | str, media_id: str, **kwargs: Any
     ) -> None:
         """Send the play_media command to the media player."""
         index = None
@@ -634,7 +631,7 @@ class SqueezeBoxEntity(MediaPlayerEntity):
 
     async def async_get_browse_image(
         self,
-        media_content_type: str,
+        media_content_type: MediaType | str,
         media_content_id: str,
         media_image_id: str | None = None,
     ) -> tuple[bytes | None, str | None]:

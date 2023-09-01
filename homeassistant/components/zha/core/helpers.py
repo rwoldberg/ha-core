@@ -27,7 +27,6 @@ import zigpy.zdo.types as zdo_types
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, State, callback
-from homeassistant.exceptions import IntegrationError
 from homeassistant.helpers import config_validation as cv, device_registry as dr
 
 from .const import (
@@ -246,11 +245,8 @@ def async_get_zha_device(hass: HomeAssistant, device_id: str) -> ZHADevice:
         _LOGGER.error("Device id `%s` not found in registry", device_id)
         raise KeyError(f"Device id `{device_id}` not found in registry.")
     zha_gateway: ZHAGateway = hass.data[DATA_ZHA][DATA_ZHA_GATEWAY]
-    if not zha_gateway.initialized:
-        _LOGGER.error("Attempting to get a ZHA device when ZHA is not initialized")
-        raise IntegrationError("ZHA is not initialized yet")
     try:
-        ieee_address = list(list(registry_device.identifiers)[0])[1]
+        ieee_address = list(registry_device.identifiers)[0][1]
         ieee = zigpy.types.EUI64.convert(ieee_address)
     except (IndexError, ValueError) as ex:
         _LOGGER.error(
@@ -309,19 +305,19 @@ class LogMixin:
 
     def debug(self, msg, *args, **kwargs):
         """Debug level log."""
-        return self.log(logging.DEBUG, msg, *args)
+        return self.log(logging.DEBUG, msg, *args, **kwargs)
 
     def info(self, msg, *args, **kwargs):
         """Info level log."""
-        return self.log(logging.INFO, msg, *args)
+        return self.log(logging.INFO, msg, *args, **kwargs)
 
     def warning(self, msg, *args, **kwargs):
         """Warning method log."""
-        return self.log(logging.WARNING, msg, *args)
+        return self.log(logging.WARNING, msg, *args, **kwargs)
 
     def error(self, msg, *args, **kwargs):
         """Error level log."""
-        return self.log(logging.ERROR, msg, *args)
+        return self.log(logging.ERROR, msg, *args, **kwargs)
 
 
 def retryable_req(
@@ -336,17 +332,17 @@ def retryable_req(
 
     def decorator(func):
         @functools.wraps(func)
-        async def wrapper(channel, *args, **kwargs):
+        async def wrapper(cluster_handler, *args, **kwargs):
             exceptions = (zigpy.exceptions.ZigbeeException, asyncio.TimeoutError)
             try_count, errors = 1, []
             for delay in itertools.chain(delays, [None]):
                 try:
-                    return await func(channel, *args, **kwargs)
+                    return await func(cluster_handler, *args, **kwargs)
                 except exceptions as ex:
                     errors.append(ex)
                     if delay:
                         delay = uniform(delay * 0.75, delay * 1.25)
-                        channel.debug(
+                        cluster_handler.debug(
                             "%s: retryable request #%d failed: %s. Retrying in %ss",
                             func.__name__,
                             try_count,
@@ -356,7 +352,7 @@ def retryable_req(
                         try_count += 1
                         await asyncio.sleep(delay)
                     else:
-                        channel.warning(
+                        cluster_handler.warning(
                             "%s: all attempts have failed: %s", func.__name__, errors
                         )
                         if raise_:
