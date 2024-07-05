@@ -223,11 +223,11 @@ class LDATADailyUsageSensor(LDATAEntity, RestoreSensor):
                 except Exception:  # pylint: disable=broad-except
                     new_state = 0.0
         self._state = new_state
+        # Subscribe to updates.
+        self.async_on_remove(self.coordinator.async_add_listener(self._state_update))
         async_dispatcher_connect(
             self.hass, DATA_UPDATED, self._schedule_immediate_update
         )
-        # Subscribe to updates.
-        self.async_on_remove(self.coordinator.async_add_listener(self._state_update))
 
     @callback
     def _schedule_immediate_update(self):
@@ -362,11 +362,11 @@ class LDATACTDailyUsageSensor(LDATACTEntity, RestoreSensor):
                 except Exception:  # pylint: disable=broad-except
                     new_state = 0.0
         self._state = new_state
+        # Subscribe to updates.
+        self.async_on_remove(self.coordinator.async_add_listener(self._state_update))
         async_dispatcher_connect(
             self.hass, DATA_UPDATED, self._schedule_immediate_update
         )
-        # Subscribe to updates.
-        self.async_on_remove(self.coordinator.async_add_listener(self._state_update))
 
     @callback
     def _schedule_immediate_update(self):
