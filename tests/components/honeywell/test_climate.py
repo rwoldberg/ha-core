@@ -1,4 +1,5 @@
 """Test the Whirlpool Sixth Sense climate domain."""
+
 import datetime
 from unittest.mock import MagicMock
 
@@ -28,15 +29,22 @@ from homeassistant.components.climate import (
     SERVICE_SET_TEMPERATURE,
     HVACMode,
 )
-from homeassistant.components.honeywell.climate import SCAN_INTERVAL
+from homeassistant.components.honeywell.climate import (
+    DOMAIN,
+    PRESET_HOLD,
+    RETRY,
+    SCAN_INTERVAL,
+)
 from homeassistant.const import (
     ATTR_ENTITY_ID,
     ATTR_TEMPERATURE,
     SERVICE_TURN_OFF,
     SERVICE_TURN_ON,
     STATE_UNAVAILABLE,
+    Platform,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util.dt import utcnow
 
@@ -45,7 +53,6 @@ from . import init_integration, reset_mock
 from tests.common import async_fire_time_changed
 
 FAN_ACTION = "fan_action"
-PRESET_HOLD = "Hold"
 
 
 async def test_no_thermostat_options(
@@ -61,6 +68,7 @@ async def test_no_thermostat_options(
 
 async def test_static_attributes(
     hass: HomeAssistant,
+    entity_registry: er.EntityRegistry,
     device: MagicMock,
     config_entry: MagicMock,
     snapshot: SnapshotAssertion,
@@ -69,7 +77,7 @@ async def test_static_attributes(
     await init_integration(hass, config_entry)
 
     entity_id = f"climate.{device.name}"
-    entry = er.async_get(hass).async_get(entity_id)
+    entry = entity_registry.async_get(entity_id)
     assert entry
 
     state = hass.states.get(entity_id)
@@ -193,6 +201,25 @@ async def test_mode_service_calls(
     device.set_system_mode.assert_called_once_with("auto")
 
     device.set_system_mode.reset_mock()
+    device.set_system_mode.side_effect = aiosomecomfort.SomeComfortError
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_HVAC_MODE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_HVAC_MODE: HVACMode.HEAT_COOL},
+            blocking=True,
+        )
+    device.set_system_mode.assert_called_once_with("auto")
+
+    device.set_system_mode.reset_mock()
+    device.set_system_mode.side_effect = aiosomecomfort.UnexpectedResponse
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_HVAC_MODE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_HVAC_MODE: HVACMode.HEAT_COOL},
+            blocking=True,
+        )
 
 
 async def test_auxheat_service_calls(
@@ -211,6 +238,7 @@ async def test_auxheat_service_calls(
     device.set_system_mode.assert_called_once_with("emheat")
 
     device.set_system_mode.reset_mock()
+
     await hass.services.async_call(
         CLIMATE_DOMAIN,
         SERVICE_SET_AUX_HEAT,
@@ -218,6 +246,27 @@ async def test_auxheat_service_calls(
         blocking=True,
     )
     device.set_system_mode.assert_called_once_with("heat")
+
+    device.set_system_mode.reset_mock()
+    device.set_system_mode.side_effect = aiosomecomfort.SomeComfortError
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_AUX_HEAT,
+            {ATTR_ENTITY_ID: entity_id, ATTR_AUX_HEAT: True},
+            blocking=True,
+        )
+    device.set_system_mode.assert_called_once_with("emheat")
+
+    device.set_system_mode.reset_mock()
+    device.set_system_mode.side_effect = aiosomecomfort.SomeComfortError
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_AUX_HEAT,
+            {ATTR_ENTITY_ID: entity_id, ATTR_AUX_HEAT: False},
+            blocking=True,
+        )
 
 
 async def test_fan_modes_service_calls(
@@ -255,6 +304,26 @@ async def test_fan_modes_service_calls(
     )
 
     device.set_fan_mode.assert_called_once_with("circulate")
+
+    device.set_fan_mode.reset_mock()
+
+    device.set_fan_mode.side_effect = aiosomecomfort.SomeComfortError
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_FAN_MODE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_FAN_MODE: FAN_DIFFUSE},
+            blocking=True,
+        )
+
+    device.set_fan_mode.side_effect = aiosomecomfort.UnexpectedResponse
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_FAN_MODE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_FAN_MODE: FAN_DIFFUSE},
+            blocking=True,
+        )
 
 
 async def test_service_calls_off_mode(
@@ -299,21 +368,40 @@ async def test_service_calls_off_mode(
     device.set_setpoint_heat.reset_mock()
     device.set_setpoint_heat.side_effect = aiosomecomfort.SomeComfortError
     caplog.clear()
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_TEMPERATURE,
-        {
-            ATTR_ENTITY_ID: entity_id,
-            ATTR_TARGET_TEMP_LOW: 25.0,
-            ATTR_TARGET_TEMP_HIGH: 35.0,
-        },
-        blocking=True,
-    )
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_TEMPERATURE,
+            {
+                ATTR_ENTITY_ID: entity_id,
+                ATTR_TARGET_TEMP_LOW: 25.0,
+                ATTR_TARGET_TEMP_HIGH: 35.0,
+            },
+            blocking=True,
+        )
     device.set_setpoint_cool.assert_called_with(95)
     device.set_setpoint_heat.assert_called_with(77)
     assert "Invalid temperature" in caplog.text
 
+    device.set_setpoint_heat.reset_mock()
+    device.set_setpoint_heat.side_effect = aiosomecomfort.UnexpectedResponse
     caplog.clear()
+
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_TEMPERATURE,
+            {
+                ATTR_ENTITY_ID: entity_id,
+                ATTR_TARGET_TEMP_LOW: 25.0,
+                ATTR_TARGET_TEMP_HIGH: 35.0,
+            },
+            blocking=True,
+        )
+    device.set_setpoint_cool.assert_called_with(95)
+    device.set_setpoint_heat.assert_called_with(77)
+
     reset_mock(device)
     await hass.services.async_call(
         CLIMATE_DOMAIN,
@@ -368,6 +456,12 @@ async def test_service_calls_off_mode(
     device.set_hold_heat.assert_called_once_with(False)
     device.set_hold_cool.assert_called_once_with(False)
 
+    device.set_hold_heat.reset_mock()
+    device.set_hold_cool.reset_mock()
+
+    device.set_setpoint_cool.reset_mock()
+    device.set_setpoint_heat.reset_mock()
+
     reset_mock(device)
 
     device.raw_ui_data["StatusHeat"] = 2
@@ -387,7 +481,6 @@ async def test_service_calls_off_mode(
     device.set_hold_heat.side_effect = aiosomecomfort.SomeComfortError
     device.raw_ui_data["StatusHeat"] = 2
     device.raw_ui_data["StatusCool"] = 2
-
     await hass.services.async_call(
         CLIMATE_DOMAIN,
         SERVICE_SET_PRESET_MODE,
@@ -443,16 +536,18 @@ async def test_service_calls_cool_mode(
     caplog.clear()
     device.set_setpoint_cool.reset_mock()
     device.set_setpoint_cool.side_effect = aiosomecomfort.SomeComfortError
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_TEMPERATURE,
-        {
-            ATTR_ENTITY_ID: entity_id,
-            ATTR_TARGET_TEMP_LOW: 25.0,
-            ATTR_TARGET_TEMP_HIGH: 35.0,
-        },
-        blocking=True,
-    )
+
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_TEMPERATURE,
+            {
+                ATTR_ENTITY_ID: entity_id,
+                ATTR_TARGET_TEMP_LOW: 25.0,
+                ATTR_TARGET_TEMP_HIGH: 35.0,
+            },
+            blocking=True,
+        )
     device.set_setpoint_cool.assert_called_with(95)
     device.set_setpoint_heat.assert_called_with(77)
     assert "Invalid temperature" in caplog.text
@@ -474,12 +569,13 @@ async def test_service_calls_cool_mode(
     device.set_hold_cool.side_effect = aiosomecomfort.SomeComfortError
     caplog.clear()
 
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_PRESET_MODE,
-        {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_AWAY},
-        blocking=True,
-    )
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_PRESET_MODE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_AWAY},
+            blocking=True,
+        )
 
     device.set_hold_cool.assert_called_once_with(True, 12)
     device.set_hold_heat.assert_not_called()
@@ -491,12 +587,13 @@ async def test_service_calls_cool_mode(
     device.raw_ui_data["StatusHeat"] = 2
     device.raw_ui_data["StatusCool"] = 2
 
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_PRESET_MODE,
-        {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_HOLD},
-        blocking=True,
-    )
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_PRESET_MODE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_HOLD},
+            blocking=True,
+        )
 
     device.set_hold_cool.assert_called_once_with(True)
     device.set_hold_heat.assert_not_called()
@@ -504,12 +601,13 @@ async def test_service_calls_cool_mode(
     device.hold_heat = True
     device.hold_cool = True
 
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_TEMPERATURE,
-        {ATTR_ENTITY_ID: entity_id, ATTR_TEMPERATURE: "20"},
-        blocking=True,
-    )
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_TEMPERATURE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_TEMPERATURE: "20"},
+            blocking=True,
+        )
 
     device.set_setpoint_cool.assert_called_once()
 
@@ -519,25 +617,25 @@ async def test_service_calls_cool_mode(
     device.raw_ui_data["StatusHeat"] = 2
     device.raw_ui_data["StatusCool"] = 2
     caplog.clear()
-
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_PRESET_MODE,
-        {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_HOLD},
-        blocking=True,
-    )
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_PRESET_MODE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_HOLD},
+            blocking=True,
+        )
     device.set_hold_cool.assert_called_once_with(True)
     device.set_hold_heat.assert_not_called()
     assert "Couldn't set permanent hold" in caplog.text
 
     reset_mock(device)
-
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_PRESET_MODE,
-        {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_NONE},
-        blocking=True,
-    )
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_PRESET_MODE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_NONE},
+            blocking=True,
+        )
 
     device.set_hold_heat.assert_not_called()
     device.set_hold_cool.assert_called_once_with(False)
@@ -546,13 +644,13 @@ async def test_service_calls_cool_mode(
     caplog.clear()
 
     device.set_hold_cool.side_effect = aiosomecomfort.SomeComfortError
-
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_PRESET_MODE,
-        {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_NONE},
-        blocking=True,
-    )
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_PRESET_MODE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_NONE},
+            blocking=True,
+        )
 
     device.set_hold_heat.assert_not_called()
     device.set_hold_cool.assert_called_once_with(False)
@@ -563,12 +661,13 @@ async def test_service_calls_cool_mode(
     device.raw_ui_data["StatusHeat"] = 2
     device.raw_ui_data["StatusCool"] = 2
 
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_PRESET_MODE,
-        {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_HOLD},
-        blocking=True,
-    )
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_PRESET_MODE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_HOLD},
+            blocking=True,
+        )
 
     device.set_hold_cool.assert_called_once_with(True)
     device.set_hold_heat.assert_not_called()
@@ -580,13 +679,13 @@ async def test_service_calls_cool_mode(
 
     device.raw_ui_data["StatusHeat"] = 2
     device.raw_ui_data["StatusCool"] = 2
-
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_PRESET_MODE,
-        {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_HOLD},
-        blocking=True,
-    )
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_PRESET_MODE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_HOLD},
+            blocking=True,
+        )
 
     device.set_hold_cool.assert_called_once_with(True)
     device.set_hold_heat.assert_not_called()
@@ -599,12 +698,13 @@ async def test_service_calls_cool_mode(
     device.raw_ui_data["StatusCool"] = 2
     device.system_mode = "Junk"
 
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_PRESET_MODE,
-        {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_HOLD},
-        blocking=True,
-    )
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_PRESET_MODE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_HOLD},
+            blocking=True,
+        )
 
     device.set_hold_cool.assert_not_called()
     device.set_hold_heat.assert_not_called()
@@ -640,16 +740,27 @@ async def test_service_calls_heat_mode(
     device.set_hold_heat.reset_mock()
 
     device.set_hold_heat.side_effect = aiosomecomfort.SomeComfortError
-
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_TEMPERATURE,
-        {ATTR_ENTITY_ID: entity_id, ATTR_TEMPERATURE: 15},
-        blocking=True,
-    )
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_TEMPERATURE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_TEMPERATURE: 15},
+            blocking=True,
+        )
     device.set_hold_heat.assert_called_once_with(datetime.time(2, 30), 59)
     device.set_hold_heat.reset_mock()
     assert "Invalid temperature" in caplog.text
+
+    device.set_hold_heat.side_effect = aiosomecomfort.UnexpectedResponse
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_TEMPERATURE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_TEMPERATURE: 15},
+            blocking=True,
+        )
+    device.set_hold_heat.assert_called_once_with(datetime.time(2, 30), 59)
+    device.set_hold_heat.reset_mock()
 
     caplog.clear()
     await hass.services.async_call(
@@ -667,16 +778,17 @@ async def test_service_calls_heat_mode(
 
     device.set_setpoint_heat.reset_mock()
     device.set_setpoint_heat.side_effect = aiosomecomfort.SomeComfortError
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_TEMPERATURE,
-        {
-            ATTR_ENTITY_ID: entity_id,
-            ATTR_TARGET_TEMP_LOW: 25.0,
-            ATTR_TARGET_TEMP_HIGH: 35.0,
-        },
-        blocking=True,
-    )
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_TEMPERATURE,
+            {
+                ATTR_ENTITY_ID: entity_id,
+                ATTR_TARGET_TEMP_LOW: 25.0,
+                ATTR_TARGET_TEMP_HIGH: 35.0,
+            },
+            blocking=True,
+        )
     device.set_setpoint_cool.assert_called_with(95)
     device.set_setpoint_heat.assert_called_with(77)
     assert "Invalid temperature" in caplog.text
@@ -685,12 +797,13 @@ async def test_service_calls_heat_mode(
     device.raw_ui_data["StatusHeat"] = 2
     device.raw_ui_data["StatusCool"] = 2
 
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_PRESET_MODE,
-        {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_HOLD},
-        blocking=True,
-    )
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_PRESET_MODE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_HOLD},
+            blocking=True,
+        )
 
     device.set_hold_heat.assert_called_once_with(True)
     device.set_hold_cool.assert_not_called()
@@ -698,12 +811,13 @@ async def test_service_calls_heat_mode(
     device.hold_heat = True
     device.hold_cool = True
 
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_TEMPERATURE,
-        {ATTR_ENTITY_ID: entity_id, ATTR_TEMPERATURE: "20"},
-        blocking=True,
-    )
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_TEMPERATURE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_TEMPERATURE: "20"},
+            blocking=True,
+        )
 
     device.set_setpoint_heat.assert_called_once()
 
@@ -715,24 +829,26 @@ async def test_service_calls_heat_mode(
     device.raw_ui_data["StatusHeat"] = 2
     device.raw_ui_data["StatusCool"] = 2
 
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_PRESET_MODE,
-        {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_HOLD},
-        blocking=True,
-    )
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_PRESET_MODE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_HOLD},
+            blocking=True,
+        )
     device.set_hold_heat.assert_called_once_with(True)
     device.set_hold_cool.assert_not_called()
     assert "Couldn't set permanent hold" in caplog.text
 
     reset_mock(device)
 
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_PRESET_MODE,
-        {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_AWAY},
-        blocking=True,
-    )
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_PRESET_MODE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_AWAY},
+            blocking=True,
+        )
 
     device.set_hold_heat.assert_called_once_with(True, 22)
     device.set_hold_cool.assert_not_called()
@@ -743,27 +859,38 @@ async def test_service_calls_heat_mode(
 
     device.set_hold_heat.side_effect = aiosomecomfort.SomeComfortError
 
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_PRESET_MODE,
-        {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_AWAY},
-        blocking=True,
-    )
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_PRESET_MODE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_AWAY},
+            blocking=True,
+        )
 
     device.set_hold_heat.assert_called_once_with(True, 22)
     device.set_hold_cool.assert_not_called()
     device.set_setpoint_cool.assert_not_called()
     assert "Temperature out of range" in caplog.text
 
+    device.set_hold_heat.side_effect = aiosomecomfort.UnexpectedResponse
+
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_PRESET_MODE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_AWAY},
+            blocking=True,
+        )
+
     reset_mock(device)
     caplog.clear()
-
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_PRESET_MODE,
-        {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_NONE},
-        blocking=True,
-    )
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_PRESET_MODE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_NONE},
+            blocking=True,
+        )
 
     device.set_hold_heat.assert_called_once_with(False)
     device.set_hold_cool.assert_called_once_with(False)
@@ -771,13 +898,13 @@ async def test_service_calls_heat_mode(
     device.set_hold_heat.reset_mock()
     device.set_hold_cool.reset_mock()
     device.set_hold_heat.side_effect = aiosomecomfort.SomeComfortError
-
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_PRESET_MODE,
-        {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_NONE},
-        blocking=True,
-    )
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_PRESET_MODE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_NONE},
+            blocking=True,
+        )
 
     device.set_hold_heat.assert_called_once_with(False)
     assert "Can not stop hold mode" in caplog.text
@@ -786,12 +913,13 @@ async def test_service_calls_heat_mode(
     device.raw_ui_data["StatusHeat"] = 2
     device.raw_ui_data["StatusCool"] = 2
 
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_PRESET_MODE,
-        {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_HOLD},
-        blocking=True,
-    )
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_PRESET_MODE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_HOLD},
+            blocking=True,
+        )
 
     device.set_hold_heat.assert_called_once_with(True)
     device.set_hold_cool.assert_not_called()
@@ -802,12 +930,13 @@ async def test_service_calls_heat_mode(
     device.raw_ui_data["StatusHeat"] = 2
     device.raw_ui_data["StatusCool"] = 2
 
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_PRESET_MODE,
-        {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_HOLD},
-        blocking=True,
-    )
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_PRESET_MODE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_HOLD},
+            blocking=True,
+        )
 
     device.set_hold_heat.assert_called_once_with(True)
     device.set_hold_cool.assert_not_called()
@@ -863,13 +992,13 @@ async def test_service_calls_auto_mode(
 
     device.set_hold_cool.side_effect = aiosomecomfort.SomeComfortError
     device.set_hold_heat.side_effect = aiosomecomfort.SomeComfortError
-
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_TEMPERATURE,
-        {ATTR_ENTITY_ID: entity_id, ATTR_TEMPERATURE: 15},
-        blocking=True,
-    )
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_TEMPERATURE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_TEMPERATURE: 15},
+            blocking=True,
+        )
     device.set_setpoint_heat.assert_not_called()
     assert "Invalid temperature" in caplog.text
 
@@ -878,16 +1007,17 @@ async def test_service_calls_auto_mode(
 
     device.set_setpoint_heat.side_effect = aiosomecomfort.SomeComfortError
     device.set_setpoint_cool.side_effect = aiosomecomfort.SomeComfortError
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_TEMPERATURE,
-        {
-            ATTR_ENTITY_ID: entity_id,
-            ATTR_TARGET_TEMP_LOW: 25.0,
-            ATTR_TARGET_TEMP_HIGH: 35.0,
-        },
-        blocking=True,
-    )
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_TEMPERATURE,
+            {
+                ATTR_ENTITY_ID: entity_id,
+                ATTR_TARGET_TEMP_LOW: 25.0,
+                ATTR_TARGET_TEMP_HIGH: 35.0,
+            },
+            blocking=True,
+        )
     device.set_setpoint_heat.assert_not_called()
     assert "Invalid temperature" in caplog.text
 
@@ -917,12 +1047,13 @@ async def test_service_calls_auto_mode(
     device.raw_ui_data["StatusHeat"] = 2
     device.raw_ui_data["StatusCool"] = 2
 
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_PRESET_MODE,
-        {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_HOLD},
-        blocking=True,
-    )
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_PRESET_MODE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_HOLD},
+            blocking=True,
+        )
     device.set_hold_cool.assert_called_once_with(True)
     device.set_hold_heat.assert_called_once_with(True)
     assert "Couldn't set permanent hold" in caplog.text
@@ -931,12 +1062,13 @@ async def test_service_calls_auto_mode(
     device.set_setpoint_heat.side_effect = None
     device.set_setpoint_cool.side_effect = None
 
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_PRESET_MODE,
-        {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_AWAY},
-        blocking=True,
-    )
+    with pytest.raises(ServiceValidationError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_PRESET_MODE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_AWAY},
+            blocking=True,
+        )
 
     device.set_hold_cool.assert_called_once_with(True, 12)
     device.set_hold_heat.assert_called_once_with(True, 22)
@@ -944,25 +1076,26 @@ async def test_service_calls_auto_mode(
     reset_mock(device)
     caplog.clear()
 
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_PRESET_MODE,
-        {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_NONE},
-        blocking=True,
-    )
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_PRESET_MODE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_NONE},
+            blocking=True,
+        )
 
     device.set_hold_heat.assert_called_once_with(False)
     device.set_hold_cool.assert_called_once_with(False)
 
     reset_mock(device)
     device.set_hold_cool.side_effect = aiosomecomfort.SomeComfortError
-
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_PRESET_MODE,
-        {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_NONE},
-        blocking=True,
-    )
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_PRESET_MODE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_NONE},
+            blocking=True,
+        )
 
     device.set_hold_heat.assert_not_called()
     device.set_hold_cool.assert_called_once_with(False)
@@ -974,12 +1107,13 @@ async def test_service_calls_auto_mode(
     device.raw_ui_data["StatusHeat"] = 2
     device.raw_ui_data["StatusCool"] = 2
 
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_PRESET_MODE,
-        {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_HOLD},
-        blocking=True,
-    )
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_PRESET_MODE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_HOLD},
+            blocking=True,
+        )
 
     device.set_hold_cool.assert_called_once_with(True)
     device.set_hold_heat.assert_not_called()
@@ -990,12 +1124,13 @@ async def test_service_calls_auto_mode(
     device.raw_ui_data["StatusHeat"] = 2
     device.raw_ui_data["StatusCool"] = 2
 
-    await hass.services.async_call(
-        CLIMATE_DOMAIN,
-        SERVICE_SET_PRESET_MODE,
-        {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_HOLD},
-        blocking=True,
-    )
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call(
+            CLIMATE_DOMAIN,
+            SERVICE_SET_PRESET_MODE,
+            {ATTR_ENTITY_ID: entity_id, ATTR_PRESET_MODE: PRESET_HOLD},
+            blocking=True,
+        )
 
     device.set_hold_cool.assert_called_once_with(True)
     device.set_hold_heat.assert_not_called()
@@ -1017,6 +1152,17 @@ async def test_async_update_errors(
     entity_id = f"climate.{device.name}"
     state = hass.states.get(entity_id)
     assert state.state == "off"
+
+    # Due to server instability, only mark entity unavailable after RETRY update attempts
+    for _ in range(RETRY):
+        async_fire_time_changed(
+            hass,
+            utcnow() + SCAN_INTERVAL,
+        )
+        await hass.async_block_till_done()
+
+        state = hass.states.get(entity_id)
+        assert state.state == "off"
 
     async_fire_time_changed(
         hass,
@@ -1061,7 +1207,6 @@ async def test_async_update_errors(
     state = hass.states.get(entity_id)
     assert state.state == "off"
 
-    # "reload integration" test
     device.refresh.side_effect = aiosomecomfort.SomeComfortError
     client.login.side_effect = aiosomecomfort.AuthError
     async_fire_time_changed(
@@ -1074,6 +1219,18 @@ async def test_async_update_errors(
     assert state.state == "off"
 
     device.refresh.side_effect = ClientConnectionError
+
+    # Due to server instability, only mark entity unavailable after RETRY update attempts
+    for _ in range(RETRY):
+        async_fire_time_changed(
+            hass,
+            utcnow() + SCAN_INTERVAL,
+        )
+        await hass.async_block_till_done()
+
+        state = hass.states.get(entity_id)
+        assert state.state == "off"
+
     async_fire_time_changed(
         hass,
         utcnow() + SCAN_INTERVAL,
@@ -1085,7 +1242,10 @@ async def test_async_update_errors(
 
 
 async def test_aux_heat_off_service_call(
-    hass: HomeAssistant, device: MagicMock, config_entry: MagicMock
+    hass: HomeAssistant,
+    entity_registry: er.EntityRegistry,
+    device: MagicMock,
+    config_entry: MagicMock,
 ) -> None:
     """Test aux heat off turns of system when no heat configured."""
     device.raw_ui_data["SwitchHeatAllowed"] = False
@@ -1095,7 +1255,7 @@ async def test_aux_heat_off_service_call(
     await init_integration(hass, config_entry)
 
     entity_id = f"climate.{device.name}"
-    entry = er.async_get(hass).async_get(entity_id)
+    entry = entity_registry.async_get(entity_id)
     assert entry
 
     state = hass.states.get(entity_id)
@@ -1110,3 +1270,22 @@ async def test_aux_heat_off_service_call(
         blocking=True,
     )
     device.set_system_mode.assert_called_once_with("off")
+
+
+async def test_unique_id(
+    hass: HomeAssistant,
+    device: MagicMock,
+    config_entry: MagicMock,
+    entity_registry: er.EntityRegistry,
+) -> None:
+    """Test unique id convert to string."""
+    entity_registry.async_get_or_create(
+        Platform.CLIMATE,
+        DOMAIN,
+        device.deviceid,
+        config_entry=config_entry,
+        suggested_object_id=device.name,
+    )
+    await init_integration(hass, config_entry)
+    entity_entry = entity_registry.async_get(f"climate.{device.name}")
+    assert entity_entry.unique_id == str(device.deviceid)

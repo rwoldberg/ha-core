@@ -1,4 +1,5 @@
 """KNX Websocket API."""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final
@@ -8,6 +9,7 @@ import voluptuous as vol
 from xknxproject.exceptions import XknxProjectException
 
 from homeassistant.components import panel_custom, websocket_api
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import HomeAssistant, callback
 
 from .const import DOMAIN
@@ -27,12 +29,17 @@ async def register_panel(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_project_file_remove)
     websocket_api.async_register_command(hass, ws_group_monitor_info)
     websocket_api.async_register_command(hass, ws_subscribe_telegram)
+    websocket_api.async_register_command(hass, ws_get_knx_project)
 
     if DOMAIN not in hass.data.get("frontend_panels", {}):
-        hass.http.register_static_path(
-            URL_BASE,
-            path=knx_panel.locate_dir(),
-            cache_headers=knx_panel.is_prod_build,
+        await hass.http.async_register_static_paths(
+            [
+                StaticPathConfig(
+                    URL_BASE,
+                    path=knx_panel.locate_dir(),
+                    cache_headers=knx_panel.is_prod_build,
+                )
+            ]
         )
         await panel_custom.async_register_panel(
             hass=hass,
@@ -67,6 +74,7 @@ def ws_info(
             "name": project_info["name"],
             "last_modified": project_info["last_modified"],
             "tool_version": project_info["tool_version"],
+            "xknxproject_version": project_info["xknxproject_version"],
         }
 
     connection.send_result(
@@ -76,6 +84,30 @@ def ws_info(
             "connected": knx.xknx.connection_manager.connected.is_set(),
             "current_address": str(knx.xknx.current_address),
             "project": _project_info,
+        },
+    )
+
+
+@websocket_api.require_admin
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "knx/get_knx_project",
+    }
+)
+@websocket_api.async_response
+async def ws_get_knx_project(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict,
+) -> None:
+    """Handle get KNX project."""
+    knx: KNXModule = hass.data[DOMAIN]
+    knxproject = await knx.project.get_knxproject()
+    connection.send_result(
+        msg["id"],
+        {
+            "project_loaded": knx.project.loaded,
+            "knxproject": knxproject,
         },
     )
 
@@ -104,7 +136,7 @@ async def ws_project_file_process(
     except (ValueError, XknxProjectException) as err:
         # ValueError could raise from file_upload integration
         connection.send_error(
-            msg["id"], websocket_api.const.ERR_HOME_ASSISTANT_ERROR, str(err)
+            msg["id"], websocket_api.ERR_HOME_ASSISTANT_ERROR, str(err)
         )
         return
 

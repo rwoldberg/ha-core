@@ -1,4 +1,5 @@
 """Support for getting data from websites with scraping."""
+
 from __future__ import annotations
 
 import logging
@@ -8,7 +9,6 @@ import voluptuous as vol
 
 from homeassistant.components.sensor import CONF_STATE_CLASS, SensorDeviceClass
 from homeassistant.components.sensor.helpers import async_parse_date_datetime
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     CONF_ATTRIBUTE,
     CONF_DEVICE_CLASS,
@@ -33,6 +33,7 @@ from homeassistant.helpers.trigger_template_entity import (
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from . import ScrapeConfigEntry
 from .const import CONF_INDEX, CONF_SELECT, DOMAIN
 from .coordinator import ScrapeCoordinator
 
@@ -93,12 +94,14 @@ async def async_setup_platform(
 
 
 async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
+    hass: HomeAssistant,
+    entry: ScrapeConfigEntry,
+    async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Scrape sensor entry."""
     entities: list = []
 
-    coordinator: ScrapeCoordinator = hass.data[DOMAIN][entry.entry_id]
+    coordinator = entry.runtime_data
     config = dict(entry.options)
     for sensor in config["sensor"]:
         sensor_config: ConfigType = vol.Schema(
@@ -112,9 +115,12 @@ async def async_setup_entry(
             Template(value_string, hass) if value_string is not None else None
         )
 
-        trigger_entity_config = {CONF_NAME: name}
+        trigger_entity_config: dict[str, str | Template | None] = {CONF_NAME: name}
         for key in TRIGGER_ENTITY_OPTIONS:
             if key not in sensor_config:
+                continue
+            if key == CONF_AVAILABILITY:
+                trigger_entity_config[key] = Template(sensor_config[key], hass)
                 continue
             trigger_entity_config[key] = sensor_config[key]
 
@@ -192,9 +198,7 @@ class ScrapeSensor(CoordinatorEntity[ScrapeCoordinator], ManualTriggerSensorEnti
 
     async def async_added_to_hass(self) -> None:
         """Ensure the data from the initial update is reflected in the state."""
-        await ManualTriggerEntity.async_added_to_hass(self)
-        # https://github.com/python/mypy/issues/15097
-        await CoordinatorEntity.async_added_to_hass(self)  # type: ignore[arg-type]
+        await super().async_added_to_hass()
         self._async_update_from_rest_data()
 
     def _async_update_from_rest_data(self) -> None:

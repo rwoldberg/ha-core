@@ -1,8 +1,9 @@
 """The NZBGet integration."""
+
 import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import CONF_SCAN_INTERVAL, Platform
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
@@ -12,7 +13,6 @@ from .const import (
     ATTR_SPEED,
     DATA_COORDINATOR,
     DATA_UNDO_UPDATE_LISTENER,
-    DEFAULT_SCAN_INTERVAL,
     DEFAULT_SPEED_LIMIT,
     DOMAIN,
     SERVICE_PAUSE,
@@ -34,18 +34,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up NZBGet from a config entry."""
     hass.data.setdefault(DOMAIN, {})
 
-    if not entry.options:
-        options = {
-            CONF_SCAN_INTERVAL: entry.data.get(
-                CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL
-            ),
-        }
-        hass.config_entries.async_update_entry(entry, options=options)
-
     coordinator = NZBGetDataUpdateCoordinator(
         hass,
         config=entry.data,
-        options=entry.options,
     )
 
     await coordinator.async_config_entry_first_refresh()

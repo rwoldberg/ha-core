@@ -1,4 +1,5 @@
 """Test different accessory types: Locks."""
+
 import pytest
 
 from homeassistant.components.homekit.const import ATTR_VALUE
@@ -13,15 +14,16 @@ from homeassistant.const import (
     ATTR_CODE,
     ATTR_ENTITY_ID,
     STATE_LOCKED,
+    STATE_UNAVAILABLE,
     STATE_UNKNOWN,
     STATE_UNLOCKED,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import Event, HomeAssistant
 
 from tests.common import async_mock_service
 
 
-async def test_lock_unlock(hass: HomeAssistant, hk_driver, events) -> None:
+async def test_lock_unlock(hass: HomeAssistant, hk_driver, events: list[Event]) -> None:
     """Test if accessory and HA are updated accordingly."""
     code = "1234"
     config = {ATTR_CODE: code}
@@ -30,7 +32,7 @@ async def test_lock_unlock(hass: HomeAssistant, hk_driver, events) -> None:
     hass.states.async_set(entity_id, None)
     await hass.async_block_till_done()
     acc = Lock(hass, hk_driver, "Lock", entity_id, 2, config)
-    await acc.run()
+    acc.run()
 
     assert acc.aid == 2
     assert acc.category == 6  # DoorLock
@@ -65,12 +67,34 @@ async def test_lock_unlock(hass: HomeAssistant, hk_driver, events) -> None:
 
     hass.states.async_set(entity_id, STATE_UNKNOWN)
     await hass.async_block_till_done()
-    assert acc.char_current_state.value == 3
+    assert acc.char_current_state.value == 2
     assert acc.char_target_state.value == 0
+
+    # Unavailable should keep last state
+    # but set the accessory to not available
+    hass.states.async_set(entity_id, STATE_UNAVAILABLE)
+    await hass.async_block_till_done()
+    assert acc.char_current_state.value == 2
+    assert acc.char_target_state.value == 0
+    assert acc.available is False
+
+    hass.states.async_set(entity_id, STATE_UNLOCKED)
+    await hass.async_block_till_done()
+    assert acc.char_current_state.value == 0
+    assert acc.char_target_state.value == 0
+    assert acc.available is True
+
+    # Unavailable should keep last state
+    # but set the accessory to not available
+    hass.states.async_set(entity_id, STATE_UNAVAILABLE)
+    await hass.async_block_till_done()
+    assert acc.char_current_state.value == 0
+    assert acc.char_target_state.value == 0
+    assert acc.available is False
 
     hass.states.async_remove(entity_id)
     await hass.async_block_till_done()
-    assert acc.char_current_state.value == 3
+    assert acc.char_current_state.value == 0
     assert acc.char_target_state.value == 0
 
     # Set from HomeKit
@@ -97,7 +121,9 @@ async def test_lock_unlock(hass: HomeAssistant, hk_driver, events) -> None:
 
 
 @pytest.mark.parametrize("config", [{}, {ATTR_CODE: None}])
-async def test_no_code(hass: HomeAssistant, hk_driver, config, events) -> None:
+async def test_no_code(
+    hass: HomeAssistant, hk_driver, config, events: list[Event]
+) -> None:
     """Test accessory if lock doesn't require a code."""
     entity_id = "lock.kitchen_door"
 

@@ -1,4 +1,5 @@
 """Support for Google Nest SDM Cameras."""
+
 from __future__ import annotations
 
 import asyncio
@@ -24,7 +25,6 @@ from homeassistant.components.stream import CONF_EXTRA_PART_WAIT_TIME
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.event import async_track_point_in_utc_time
 from homeassistant.util.dt import utcnow
@@ -48,14 +48,12 @@ async def async_setup_entry(
     device_manager: DeviceManager = hass.data[DOMAIN][entry.entry_id][
         DATA_DEVICE_MANAGER
     ]
-    entities = []
-    for device in device_manager.devices.values():
-        if (
-            CameraImageTrait.NAME in device.traits
-            or CameraLiveStreamTrait.NAME in device.traits
-        ):
-            entities.append(NestCamera(device))
-    async_add_entities(entities)
+    async_add_entities(
+        NestCamera(device)
+        for device in device_manager.devices.values()
+        if CameraImageTrait.NAME in device.traits
+        or CameraLiveStreamTrait.NAME in device.traits
+    )
 
 
 class NestCamera(Camera):
@@ -68,7 +66,10 @@ class NestCamera(Camera):
         """Initialize the camera."""
         super().__init__()
         self._device = device
-        self._device_info = NestDeviceInfo(device)
+        nest_device_info = NestDeviceInfo(device)
+        self._attr_device_info = nest_device_info.device_info
+        self._attr_brand = nest_device_info.device_brand
+        self._attr_model = nest_device_info.device_model
         self._stream: RtspStream | None = None
         self._create_stream_url_lock = asyncio.Lock()
         self._stream_refresh_unsub: Callable[[], None] | None = None
@@ -84,32 +85,13 @@ class NestCamera(Camera):
             if StreamingProtocol.RTSP in trait.supported_protocols:
                 self._rtsp_live_stream_trait = trait
         self.stream_options[CONF_EXTRA_PART_WAIT_TIME] = 3
+        # The API "name" field is a unique device identifier.
+        self._attr_unique_id = f"{self._device.name}-camera"
 
     @property
     def use_stream_for_stills(self) -> bool:
         """Whether or not to use stream to generate stills."""
         return self._rtsp_live_stream_trait is not None
-
-    @property
-    def unique_id(self) -> str:
-        """Return a unique ID."""
-        # The API "name" field is a unique device identifier.
-        return f"{self._device.name}-camera"
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return device specific attributes."""
-        return self._device_info.device_info
-
-    @property
-    def brand(self) -> str | None:
-        """Return the camera brand."""
-        return self._device_info.device_brand
-
-    @property
-    def model(self) -> str | None:
-        """Return the camera model."""
-        return self._device_info.device_model
 
     @property
     def frontend_stream_type(self) -> StreamType | None:

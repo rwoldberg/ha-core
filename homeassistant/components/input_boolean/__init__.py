@@ -1,4 +1,5 @@
 """Support to keep track of user controlled booleans for within automation."""
+
 from __future__ import annotations
 
 import logging
@@ -22,13 +23,10 @@ from homeassistant.helpers import collection
 import homeassistant.helpers.config_validation as cv
 from homeassistant.helpers.entity import ToggleEntity
 from homeassistant.helpers.entity_component import EntityComponent
-from homeassistant.helpers.integration_platform import (
-    async_process_integration_platform_for_component,
-)
 from homeassistant.helpers.restore_state import RestoreEntity
 import homeassistant.helpers.service
 from homeassistant.helpers.storage import Store
-from homeassistant.helpers.typing import ConfigType
+from homeassistant.helpers.typing import ConfigType, VolDictType
 from homeassistant.loader import bind_hass
 
 DOMAIN = "input_boolean"
@@ -37,7 +35,7 @@ _LOGGER = logging.getLogger(__name__)
 
 CONF_INITIAL = "initial"
 
-STORAGE_FIELDS = {
+STORAGE_FIELDS: VolDictType = {
     vol.Required(CONF_NAME): vol.All(str, vol.Length(min=1)),
     vol.Optional(CONF_INITIAL): cv.boolean,
     vol.Optional(CONF_ICON): cv.icon,
@@ -93,10 +91,6 @@ def is_on(hass: HomeAssistant, entity_id: str) -> bool:
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     """Set up an input boolean."""
     component = EntityComponent[InputBoolean](_LOGGER, DOMAIN, hass)
-
-    # Process integration platforms right away since
-    # we will create entities before firing EVENT_COMPONENT_LOADED
-    await async_process_integration_platform_for_component(hass, DOMAIN)
 
     id_manager = collection.IDManager()
 
@@ -155,6 +149,8 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 class InputBoolean(collection.CollectionEntity, ToggleEntity, RestoreEntity):
     """Representation of a boolean input."""
+
+    _unrecorded_attributes = frozenset({ATTR_EDITABLE})
 
     _attr_should_poll = False
     editable: bool

@@ -1,4 +1,5 @@
 """Support for SmartThings Cloud."""
+
 from __future__ import annotations
 
 import asyncio
@@ -26,6 +27,8 @@ from homeassistant.helpers.dispatcher import (
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.typing import ConfigType
+from homeassistant.loader import async_get_loaded_integration
+from homeassistant.setup import SetupPhases, async_pause_setup
 
 from .config_flow import SmartThingsFlowHandler  # noqa: F401
 from .const import (
@@ -103,6 +106,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     api = SmartThings(async_get_clientsession(hass), entry.data[CONF_ACCESS_TOKEN])
 
+    # Ensure platform modules are loaded since the DeviceBroker will
+    # import them below and we want them to be cached ahead of time
+    # so the integration does not do blocking I/O in the event loop
+    # to import the modules.
+    await async_get_loaded_integration(hass, DOMAIN).async_get_platforms(PLATFORMS)
+
     remove_entry = False
     try:
         # See if the app is already setup. This occurs when there are
@@ -162,7 +171,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         )
 
         # Setup device broker
-        broker = DeviceBroker(hass, entry, token, smart_app, devices, scenes)
+        with async_pause_setup(hass, SetupPhases.WAIT_IMPORT_PLATFORMS):
+            # DeviceBroker has a side effect of importing platform
+            # modules when its created. In the future this should be
+            # refactored to not do this.
+            broker = await hass.async_add_import_executor_job(
+                DeviceBroker, hass, entry, token, smart_app, devices, scenes
+            )
         broker.connect()
         hass.data[DOMAIN][DATA_BROKERS][entry.entry_id] = broker
 
@@ -429,6 +444,17 @@ class SmartThingsEntity(Entity):
         """Initialize the instance."""
         self._device = device
         self._dispatcher_remove = None
+        self._attr_name = device.label
+        self._attr_unique_id = device.device_id
+        self._attr_device_info = DeviceInfo(
+            configuration_url="https://account.smartthings.com",
+            identifiers={(DOMAIN, device.device_id)},
+            manufacturer=device.status.ocf_manufacturer_name,
+            model=device.status.ocf_model_number,
+            name=device.label,
+            hw_version=device.status.ocf_hardware_version,
+            sw_version=device.status.ocf_firmware_version,
+        )
 
     async def async_added_to_hass(self):
         """Device added to hass."""
@@ -446,26 +472,3 @@ class SmartThingsEntity(Entity):
         """Disconnect the device when removed."""
         if self._dispatcher_remove:
             self._dispatcher_remove()
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Get attributes about the device."""
-        return DeviceInfo(
-            configuration_url="https://account.smartthings.com",
-            identifiers={(DOMAIN, self._device.device_id)},
-            manufacturer=self._device.status.ocf_manufacturer_name,
-            model=self._device.status.ocf_model_number,
-            name=self._device.label,
-            hw_version=self._device.status.ocf_hardware_version,
-            sw_version=self._device.status.ocf_firmware_version,
-        )
-
-    @property
-    def name(self) -> str:
-        """Return the name of the device."""
-        return self._device.label
-
-    @property
-    def unique_id(self) -> str:
-        """Return a unique ID."""
-        return self._device.device_id

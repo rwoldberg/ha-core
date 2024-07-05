@@ -1,4 +1,5 @@
 """Support for switches which integrates with other components."""
+
 from __future__ import annotations
 
 from typing import Any
@@ -7,7 +8,7 @@ import voluptuous as vol
 
 from homeassistant.components.switch import (
     ENTITY_ID_FORMAT,
-    PLATFORM_SCHEMA,
+    PLATFORM_SCHEMA as SWITCH_PLATFORM_SCHEMA,
     SwitchEntity,
 )
 from homeassistant.const import (
@@ -54,7 +55,7 @@ SWITCH_SCHEMA = vol.All(
     ).extend(TEMPLATE_ENTITY_COMMON_SCHEMA_LEGACY.schema),
 )
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
+PLATFORM_SCHEMA = SWITCH_PLATFORM_SCHEMA.extend(
     {vol.Required(CONF_SWITCHES): cv.schema_with_slug_keys(SWITCH_SCHEMA)}
 )
 
@@ -113,6 +114,7 @@ class SwitchTemplate(TemplateEntity, SwitchEntity, RestoreEntity):
         self._on_script = Script(hass, config[ON_ACTION], friendly_name, DOMAIN)
         self._off_script = Script(hass, config[OFF_ACTION], friendly_name, DOMAIN)
         self._state: bool | None = False
+        self._attr_assumed_state = self._template is None
 
     @callback
     def _update_state(self, result):
@@ -168,8 +170,3 @@ class SwitchTemplate(TemplateEntity, SwitchEntity, RestoreEntity):
         if self._template is None:
             self._state = False
             self.async_write_ha_state()
-
-    @property
-    def assumed_state(self) -> bool:
-        """State is assumed, if no template given."""
-        return self._template is None

@@ -23,7 +23,7 @@
         "electricity_produced": 0.0
       },
       "switches": {
-        "lock": false,
+        "lock": true,
         "relay": true
       },
       "vendor": "Plugwise",
@@ -47,15 +47,6 @@
       },
       "vendor": "Plugwise",
       "zigbee_mac_address": "ABCD012345670A07"
-    },
-    "71e1944f2a944b26ad73323e399efef0": {
-      "dev_class": "switching",
-      "members": ["5ca521ac179d468e91d772eeeb8a2117"],
-      "model": "Switchgroup",
-      "name": "Test",
-      "switches": {
-        "relay": true
-      }
     },
     "aac7b735042c4832ac9ff33aae4f453b": {
       "dev_class": "dishwasher",
@@ -144,7 +135,7 @@
   },
   "gateway": {
     "gateway_id": "0000aaaa0000aaaa0000aaaa0000aa00",
-    "notifications": {},
+    "item_count": 83,
     "smile_name": "Stretch"
   }
 }

@@ -1,4 +1,5 @@
 """Support for Logi Circle sensors."""
+
 from __future__ import annotations
 
 import logging
@@ -106,16 +107,12 @@ class LogiSensor(SensorEntity):
         self._attr_unique_id = f"{camera.mac_address}-{description.key}"
         self._activity: dict[Any, Any] = {}
         self._tz = time_zone
-
-    @property
-    def device_info(self) -> DeviceInfo:
-        """Return information about the device."""
-        return DeviceInfo(
-            identifiers={(LOGI_CIRCLE_DOMAIN, self._camera.id)},
+        self._attr_device_info = DeviceInfo(
+            identifiers={(LOGI_CIRCLE_DOMAIN, camera.id)},
             manufacturer=DEVICE_BRAND,
-            model=self._camera.model_name,
-            name=self._camera.name,
-            sw_version=self._camera.firmware,
+            model=camera.model_name,
+            name=camera.name,
+            sw_version=camera.firmware,
         )
 
     @property

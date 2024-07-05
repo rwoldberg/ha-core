@@ -1,4 +1,5 @@
 """Home Assistant extension for Syrupy."""
+
 from __future__ import annotations
 
 from contextlib import suppress
@@ -85,6 +86,7 @@ class HomeAssistantSnapshotSerializer(AmberDataSerializer):
         *,
         depth: int = 0,
         exclude: PropertyFilter | None = None,
+        include: PropertyFilter | None = None,
         matcher: PropertyMatcher | None = None,
         path: PropertyPath = (),
         visited: set[Any] | None = None,
@@ -125,6 +127,7 @@ class HomeAssistantSnapshotSerializer(AmberDataSerializer):
             serializable_data,
             depth=depth,
             exclude=exclude,
+            include=include,
             matcher=matcher,
             path=path,
             visited=visited,
@@ -156,7 +159,8 @@ class HomeAssistantSnapshotSerializer(AmberDataSerializer):
         )
         if serialized["via_device_id"] is not None:
             serialized["via_device_id"] = ANY
-        serialized.pop("_json_repr")
+        if serialized["primary_config_entry"] is not None:
+            serialized["primary_config_entry"] = ANY
         return serialized
 
     @classmethod
@@ -173,8 +177,7 @@ class HomeAssistantSnapshotSerializer(AmberDataSerializer):
                 "options": {k: dict(v) for k, v in data.options.items()},
             }
         )
-        serialized.pop("_partial_repr")
-        serialized.pop("_display_repr")
+        serialized.pop("categories")
         return serialized
 
     @classmethod
@@ -197,6 +200,7 @@ class HomeAssistantSnapshotSerializer(AmberDataSerializer):
             | {
                 "context": ANY,
                 "last_changed": ANY,
+                "last_reported": ANY,
                 "last_updated": ANY,
             }
         )

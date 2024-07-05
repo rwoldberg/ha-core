@@ -1,5 +1,7 @@
 """Tests for the Yeelight integration."""
+
 from datetime import timedelta
+from ipaddress import ip_address
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from async_upnp_client.search import SsdpSearchListener
@@ -42,8 +44,8 @@ CAPABILITIES = {
 ID_DECIMAL = f"{int(ID, 16):08d}"
 
 ZEROCONF_DATA = zeroconf.ZeroconfServiceInfo(
-    host=IP_ADDRESS,
-    addresses=[IP_ADDRESS],
+    ip_address=ip_address(IP_ADDRESS),
+    ip_addresses=[ip_address(IP_ADDRESS)],
     port=54321,
     hostname=f"yeelink-light-strip1_miio{ID_DECIMAL}.local.",
     type="_miio._udp.local.",
@@ -113,6 +115,7 @@ class MockAsyncBulb:
         self.bulb_type = bulb_type
         self._async_callback = None
         self._cannot_connect = cannot_connect
+        self.capabilities = None
 
     async def async_listen(self, callback):
         """Mock the listener."""
@@ -130,6 +133,7 @@ class MockAsyncBulb:
 
 
 def _mocked_bulb(cannot_connect=False):
+    # pylint: disable=attribute-defined-outside-init
     bulb = MockAsyncBulb(MODEL, BulbType.Color, cannot_connect)
     type(bulb).async_get_properties = AsyncMock(
         side_effect=BulbException if cannot_connect else None

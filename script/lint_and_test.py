@@ -3,6 +3,7 @@
 
 This is NOT a full CI/linting replacement, only a quick check during development.
 """
+
 import asyncio
 from collections import namedtuple
 from contextlib import suppress
@@ -75,12 +76,12 @@ async def async_exec(*args, display=False):
         if display:
             kwargs["stderr"] = asyncio.subprocess.PIPE
         proc = await asyncio.create_subprocess_exec(*args, **kwargs)
-    except FileNotFoundError as err:
+    except FileNotFoundError:
         printc(FAIL, f"Could not execute {args[0]}. Did you install test requirements?")
-        raise err
+        raise
 
     if not display:
-        # Readin stdout into log
+        # Reading stdout into log
         stdout, _ = await proc.communicate()
     else:
         # read child's stdout/stderr concurrently (capture and display)
@@ -173,8 +174,7 @@ async def main():
         )
         return
 
-    pyfile = re.compile(r".+\.py$")
-    pyfiles = [file for file in files if pyfile.match(file)]
+    pyfiles = [file for file in files if file.endswith(".py")]
 
     print("=============================")
     printc("bold", "CHANGED FILES:\n", "\n ".join(pyfiles))
@@ -224,7 +224,15 @@ async def main():
         return
 
     code, _ = await async_exec(
-        "pytest", "-vv", "--force-sugar", "--", *test_files, display=True
+        "python3",
+        "-b",
+        "-m",
+        "pytest",
+        "-vv",
+        "--force-sugar",
+        "--",
+        *test_files,
+        display=True,
     )
     print("=============================")
 

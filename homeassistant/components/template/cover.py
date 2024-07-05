@@ -1,4 +1,5 @@
 """Support for covers which integrate with other components."""
+
 from __future__ import annotations
 
 import logging
@@ -11,8 +12,7 @@ from homeassistant.components.cover import (
     ATTR_TILT_POSITION,
     DEVICE_CLASSES_SCHEMA,
     ENTITY_ID_FORMAT,
-    PLATFORM_SCHEMA,
-    CoverDeviceClass,
+    PLATFORM_SCHEMA as COVER_PLATFORM_SCHEMA,
     CoverEntity,
     CoverEntityFeature,
 )
@@ -96,7 +96,7 @@ COVER_SCHEMA = vol.All(
     cv.has_at_least_one_key(OPEN_ACTION, POSITION_ACTION),
 )
 
-PLATFORM_SCHEMA = PLATFORM_SCHEMA.extend(
+PLATFORM_SCHEMA = COVER_PLATFORM_SCHEMA.extend(
     {vol.Required(CONF_COVERS): cv.schema_with_slug_keys(COVER_SCHEMA)}
 )
 
@@ -155,7 +155,7 @@ class CoverTemplate(TemplateEntity, CoverEntity):
         self._template = config.get(CONF_VALUE_TEMPLATE)
         self._position_template = config.get(CONF_POSITION_TEMPLATE)
         self._tilt_template = config.get(CONF_TILT_TEMPLATE)
-        self._device_class: CoverDeviceClass | None = config.get(CONF_DEVICE_CLASS)
+        self._attr_device_class = config.get(CONF_DEVICE_CLASS)
         self._open_script = None
         if (open_action := config.get(OPEN_ACTION)) is not None:
             self._open_script = Script(hass, open_action, friendly_name, DOMAIN)
@@ -181,6 +181,15 @@ class CoverTemplate(TemplateEntity, CoverEntity):
         self._is_opening = False
         self._is_closing = False
         self._tilt_value = None
+
+        supported_features = CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE
+        if self._stop_script is not None:
+            supported_features |= CoverEntityFeature.STOP
+        if self._position_script is not None:
+            supported_features |= CoverEntityFeature.SET_POSITION
+        if self._tilt_script is not None:
+            supported_features |= TILT_FEATURES
+        self._attr_supported_features = supported_features
 
     @callback
     def _async_setup_templates(self) -> None:
@@ -317,27 +326,6 @@ class CoverTemplate(TemplateEntity, CoverEntity):
         None is unknown, 0 is closed, 100 is fully open.
         """
         return self._tilt_value
-
-    @property
-    def device_class(self) -> CoverDeviceClass | None:
-        """Return the device class of the cover."""
-        return self._device_class
-
-    @property
-    def supported_features(self) -> CoverEntityFeature:
-        """Flag supported features."""
-        supported_features = CoverEntityFeature.OPEN | CoverEntityFeature.CLOSE
-
-        if self._stop_script is not None:
-            supported_features |= CoverEntityFeature.STOP
-
-        if self._position_script is not None:
-            supported_features |= CoverEntityFeature.SET_POSITION
-
-        if self._tilt_script is not None:
-            supported_features |= TILT_FEATURES
-
-        return supported_features
 
     async def async_open_cover(self, **kwargs: Any) -> None:
         """Move the cover up."""

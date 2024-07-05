@@ -1,4 +1,5 @@
 """Trigger entity."""
+
 from __future__ import annotations
 
 from homeassistant.core import HomeAssistant, callback
@@ -23,8 +24,7 @@ class TriggerEntity(TriggerBaseEntity, CoordinatorEntity[TriggerUpdateCoordinato
 
     async def async_added_to_hass(self) -> None:
         """Handle being added to Home Assistant."""
-        await TriggerBaseEntity.async_added_to_hass(self)
-        await CoordinatorEntity.async_added_to_hass(self)  # type: ignore[arg-type]
+        await super().async_added_to_hass()
         if self.coordinator.data is not None:
             self._process_data()
 

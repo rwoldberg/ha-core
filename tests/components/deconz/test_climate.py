@@ -1,5 +1,6 @@
 """deCONZ climate platform tests."""
-from unittest.mock import patch
+
+from collections.abc import Callable
 
 import pytest
 
@@ -34,6 +35,7 @@ from homeassistant.components.deconz.climate import (
     DECONZ_PRESET_MANUAL,
 )
 from homeassistant.components.deconz.const import CONF_ALLOW_CLIP_SENSOR
+from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     ATTR_ENTITY_ID,
     ATTR_TEMPERATURE,
@@ -41,33 +43,15 @@ from homeassistant.const import (
     STATE_UNAVAILABLE,
 )
 from homeassistant.core import HomeAssistant
-
-from .test_gateway import (
-    DECONZ_WEB_REQUEST,
-    mock_deconz_put_request,
-    setup_deconz_integration,
-)
+from homeassistant.exceptions import ServiceValidationError
 
 from tests.test_util.aiohttp import AiohttpClientMocker
 
 
-async def test_no_sensors(
-    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
-) -> None:
-    """Test that no sensors in deconz results in no climate entities."""
-    await setup_deconz_integration(hass, aioclient_mock)
-    assert len(hass.states.async_all()) == 0
-
-
-async def test_simple_climate_device(
-    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, mock_deconz_websocket
-) -> None:
-    """Test successful creation of climate entities.
-
-    This is a simple water heater that only supports setting temperature and on and off.
-    """
-    data = {
-        "sensors": {
+@pytest.mark.parametrize(
+    "sensor_payload",
+    [
+        {
             "0": {
                 "config": {
                     "battery": 59,
@@ -99,10 +83,18 @@ async def test_simple_climate_device(
                 "uniqueid": "14:b4:57:ff:fe:d5:4e:77-01-0201",
             }
         }
-    }
-    with patch.dict(DECONZ_WEB_REQUEST, data):
-        config_entry = await setup_deconz_integration(hass, aioclient_mock)
+    ],
+)
+@pytest.mark.usefixtures("config_entry_setup")
+async def test_simple_climate_device(
+    hass: HomeAssistant,
+    mock_put_request: Callable[[str, str], AiohttpClientMocker],
+    mock_deconz_websocket,
+) -> None:
+    """Test successful creation of climate entities.
 
+    This is a simple water heater that only supports setting temperature and on and off.
+    """
     assert len(hass.states.async_all()) == 2
     climate_thermostat = hass.states.get("climate.thermostat")
     assert climate_thermostat.state == HVACMode.HEAT
@@ -154,7 +146,7 @@ async def test_simple_climate_device(
 
     # Verify service calls
 
-    mock_deconz_put_request(aioclient_mock, config_entry.data, "/sensors/0/config")
+    aioclient_mock = mock_put_request("/sensors/0/config")
 
     # Service turn on thermostat
 
@@ -187,12 +179,10 @@ async def test_simple_climate_device(
         )
 
 
-async def test_climate_device_without_cooling_support(
-    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, mock_deconz_websocket
-) -> None:
-    """Test successful creation of sensor entities."""
-    data = {
-        "sensors": {
+@pytest.mark.parametrize(
+    "sensor_payload",
+    [
+        {
             "1": {
                 "name": "Thermostat",
                 "type": "ZHAThermostat",
@@ -207,10 +197,15 @@ async def test_climate_device_without_cooling_support(
                 "uniqueid": "00:00:00:00:00:00:00:00-00",
             }
         }
-    }
-    with patch.dict(DECONZ_WEB_REQUEST, data):
-        config_entry = await setup_deconz_integration(hass, aioclient_mock)
-
+    ],
+)
+async def test_climate_device_without_cooling_support(
+    hass: HomeAssistant,
+    config_entry_setup: ConfigEntry,
+    mock_put_request: Callable[[str, str], AiohttpClientMocker],
+    mock_deconz_websocket,
+) -> None:
+    """Test successful creation of sensor entities."""
     assert len(hass.states.async_all()) == 2
     climate_thermostat = hass.states.get("climate.thermostat")
     assert climate_thermostat.state == HVACMode.AUTO
@@ -287,7 +282,7 @@ async def test_climate_device_without_cooling_support(
 
     # Verify service calls
 
-    mock_deconz_put_request(aioclient_mock, config_entry.data, "/sensors/1/config")
+    aioclient_mock = mock_put_request("/sensors/1/config")
 
     # Service set HVAC mode to auto
 
@@ -353,24 +348,22 @@ async def test_climate_device_without_cooling_support(
             blocking=True,
         )
 
-    await hass.config_entries.async_unload(config_entry.entry_id)
+    await hass.config_entries.async_unload(config_entry_setup.entry_id)
 
     states = hass.states.async_all()
     assert len(states) == 2
     for state in states:
         assert state.state == STATE_UNAVAILABLE
 
-    await hass.config_entries.async_remove(config_entry.entry_id)
+    await hass.config_entries.async_remove(config_entry_setup.entry_id)
     await hass.async_block_till_done()
     assert len(hass.states.async_all()) == 0
 
 
-async def test_climate_device_with_cooling_support(
-    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, mock_deconz_websocket
-) -> None:
-    """Test successful creation of sensor entities."""
-    data = {
-        "sensors": {
+@pytest.mark.parametrize(
+    "sensor_payload",
+    [
+        {
             "0": {
                 "config": {
                     "battery": 25,
@@ -397,10 +390,15 @@ async def test_climate_device_with_cooling_support(
                 "uniqueid": "00:24:46:00:00:11:6f:56-01-0201",
             }
         }
-    }
-    with patch.dict(DECONZ_WEB_REQUEST, data):
-        config_entry = await setup_deconz_integration(hass, aioclient_mock)
-
+    ],
+)
+@pytest.mark.usefixtures("config_entry_setup")
+async def test_climate_device_with_cooling_support(
+    hass: HomeAssistant,
+    mock_put_request: Callable[[str, str], AiohttpClientMocker],
+    mock_deconz_websocket,
+) -> None:
+    """Test successful creation of sensor entities."""
     assert len(hass.states.async_all()) == 2
     climate_thermostat = hass.states.get("climate.zen_01")
     assert climate_thermostat.state == HVACMode.HEAT
@@ -456,7 +454,7 @@ async def test_climate_device_with_cooling_support(
 
     # Verify service calls
 
-    mock_deconz_put_request(aioclient_mock, config_entry.data, "/sensors/0/config")
+    aioclient_mock = mock_put_request("/sensors/0/config")
 
     # Service set temperature to 20
 
@@ -469,12 +467,10 @@ async def test_climate_device_with_cooling_support(
     assert aioclient_mock.mock_calls[1][2] == {"coolsetpoint": 2000.0}
 
 
-async def test_climate_device_with_fan_support(
-    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, mock_deconz_websocket
-) -> None:
-    """Test successful creation of sensor entities."""
-    data = {
-        "sensors": {
+@pytest.mark.parametrize(
+    "sensor_payload",
+    [
+        {
             "0": {
                 "config": {
                     "battery": 25,
@@ -501,10 +497,15 @@ async def test_climate_device_with_fan_support(
                 "uniqueid": "00:24:46:00:00:11:6f:56-01-0201",
             }
         }
-    }
-    with patch.dict(DECONZ_WEB_REQUEST, data):
-        config_entry = await setup_deconz_integration(hass, aioclient_mock)
-
+    ],
+)
+@pytest.mark.usefixtures("config_entry_setup")
+async def test_climate_device_with_fan_support(
+    hass: HomeAssistant,
+    mock_put_request: Callable[[str, str], AiohttpClientMocker],
+    mock_deconz_websocket,
+) -> None:
+    """Test successful creation of sensor entities."""
     assert len(hass.states.async_all()) == 2
     climate_thermostat = hass.states.get("climate.zen_01")
     assert climate_thermostat.state == HVACMode.HEAT
@@ -578,7 +579,7 @@ async def test_climate_device_with_fan_support(
 
     # Verify service calls
 
-    mock_deconz_put_request(aioclient_mock, config_entry.data, "/sensors/0/config")
+    aioclient_mock = mock_put_request("/sensors/0/config")
 
     # Service set fan mode to off
 
@@ -602,7 +603,7 @@ async def test_climate_device_with_fan_support(
 
     # Service set fan mode to unsupported value
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ServiceValidationError):
         await hass.services.async_call(
             CLIMATE_DOMAIN,
             SERVICE_SET_FAN_MODE,
@@ -611,12 +612,10 @@ async def test_climate_device_with_fan_support(
         )
 
 
-async def test_climate_device_with_preset(
-    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, mock_deconz_websocket
-) -> None:
-    """Test successful creation of sensor entities."""
-    data = {
-        "sensors": {
+@pytest.mark.parametrize(
+    "sensor_payload",
+    [
+        {
             "0": {
                 "config": {
                     "battery": 25,
@@ -644,10 +643,15 @@ async def test_climate_device_with_preset(
                 "uniqueid": "00:24:46:00:00:11:6f:56-01-0201",
             }
         }
-    }
-    with patch.dict(DECONZ_WEB_REQUEST, data):
-        config_entry = await setup_deconz_integration(hass, aioclient_mock)
-
+    ],
+)
+@pytest.mark.usefixtures("config_entry_setup")
+async def test_climate_device_with_preset(
+    hass: HomeAssistant,
+    mock_put_request: Callable[[str, str], AiohttpClientMocker],
+    mock_deconz_websocket,
+) -> None:
+    """Test successful creation of sensor entities."""
     assert len(hass.states.async_all()) == 2
 
     climate_zen_01 = hass.states.get("climate.zen_01")
@@ -701,7 +705,7 @@ async def test_climate_device_with_preset(
 
     # Verify service calls
 
-    mock_deconz_put_request(aioclient_mock, config_entry.data, "/sensors/0/config")
+    aioclient_mock = mock_put_request("/sensors/0/config")
 
     # Service set preset to HASS preset
 
@@ -725,7 +729,7 @@ async def test_climate_device_with_preset(
 
     # Service set preset to unsupported value
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ServiceValidationError):
         await hass.services.async_call(
             CLIMATE_DOMAIN,
             SERVICE_SET_PRESET_MODE,
@@ -734,12 +738,10 @@ async def test_climate_device_with_preset(
         )
 
 
-async def test_clip_climate_device(
-    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
-) -> None:
-    """Test successful creation of sensor entities."""
-    data = {
-        "sensors": {
+@pytest.mark.parametrize(
+    "sensor_payload",
+    [
+        {
             "1": {
                 "name": "Thermostat",
                 "type": "ZHAThermostat",
@@ -761,12 +763,13 @@ async def test_clip_climate_device(
                 "uniqueid": "00:00:00:00:00:00:00:02-00",
             },
         }
-    }
-    with patch.dict(DECONZ_WEB_REQUEST, data):
-        config_entry = await setup_deconz_integration(
-            hass, aioclient_mock, options={CONF_ALLOW_CLIP_SENSOR: True}
-        )
-
+    ],
+)
+@pytest.mark.parametrize("config_entry_options", [{CONF_ALLOW_CLIP_SENSOR: True}])
+async def test_clip_climate_device(
+    hass: HomeAssistant, config_entry_setup: ConfigEntry
+) -> None:
+    """Test successful creation of sensor entities."""
     assert len(hass.states.async_all()) == 3
     assert hass.states.get("climate.clip_thermostat").state == HVACMode.HEAT
     assert (
@@ -777,7 +780,7 @@ async def test_clip_climate_device(
     # Disallow clip sensors
 
     hass.config_entries.async_update_entry(
-        config_entry, options={CONF_ALLOW_CLIP_SENSOR: False}
+        config_entry_setup, options={CONF_ALLOW_CLIP_SENSOR: False}
     )
     await hass.async_block_till_done()
 
@@ -787,7 +790,7 @@ async def test_clip_climate_device(
     # Allow clip sensors
 
     hass.config_entries.async_update_entry(
-        config_entry, options={CONF_ALLOW_CLIP_SENSOR: True}
+        config_entry_setup, options={CONF_ALLOW_CLIP_SENSOR: True}
     )
     await hass.async_block_till_done()
 
@@ -799,12 +802,10 @@ async def test_clip_climate_device(
     )
 
 
-async def test_verify_state_update(
-    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, mock_deconz_websocket
-) -> None:
-    """Test that state update properly."""
-    data = {
-        "sensors": {
+@pytest.mark.parametrize(
+    "sensor_payload",
+    [
+        {
             "1": {
                 "name": "Thermostat",
                 "type": "ZHAThermostat",
@@ -819,10 +820,11 @@ async def test_verify_state_update(
                 "uniqueid": "00:00:00:00:00:00:00:00-00",
             }
         }
-    }
-    with patch.dict(DECONZ_WEB_REQUEST, data):
-        await setup_deconz_integration(hass, aioclient_mock)
-
+    ],
+)
+@pytest.mark.usefixtures("config_entry_setup")
+async def test_verify_state_update(hass: HomeAssistant, mock_deconz_websocket) -> None:
+    """Test that state update properly."""
     assert hass.states.get("climate.thermostat").state == HVACMode.AUTO
     assert (
         hass.states.get("climate.thermostat").attributes["hvac_action"]
@@ -846,8 +848,9 @@ async def test_verify_state_update(
     )
 
 
+@pytest.mark.usefixtures("config_entry_setup")
 async def test_add_new_climate_device(
-    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, mock_deconz_websocket
+    hass: HomeAssistant, mock_deconz_websocket
 ) -> None:
     """Test that adding a new climate device works."""
     event_added_sensor = {
@@ -871,7 +874,6 @@ async def test_add_new_climate_device(
         },
     }
 
-    await setup_deconz_integration(hass, aioclient_mock)
     assert len(hass.states.async_all()) == 0
 
     await mock_deconz_websocket(data=event_added_sensor)
@@ -886,12 +888,10 @@ async def test_add_new_climate_device(
     )
 
 
-async def test_not_allow_clip_thermostat(
-    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker
-) -> None:
-    """Test that CLIP thermostats are not allowed."""
-    data = {
-        "sensors": {
+@pytest.mark.parametrize(
+    "sensor_payload",
+    [
+        {
             "1": {
                 "name": "CLIP thermostat sensor",
                 "type": "CLIPThermostat",
@@ -900,22 +900,19 @@ async def test_not_allow_clip_thermostat(
                 "uniqueid": "00:00:00:00:00:00:00:00-00",
             },
         }
-    }
-
-    with patch.dict(DECONZ_WEB_REQUEST, data):
-        await setup_deconz_integration(
-            hass, aioclient_mock, options={CONF_ALLOW_CLIP_SENSOR: False}
-        )
-
+    ],
+)
+@pytest.mark.parametrize("config_entry_options", [{CONF_ALLOW_CLIP_SENSOR: False}])
+@pytest.mark.usefixtures("config_entry_setup")
+async def test_not_allow_clip_thermostat(hass: HomeAssistant) -> None:
+    """Test that CLIP thermostats are not allowed."""
     assert len(hass.states.async_all()) == 0
 
 
-async def test_no_mode_no_state(
-    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, mock_deconz_websocket
-) -> None:
-    """Test that a climate device without mode and state works."""
-    data = {
-        "sensors": {
+@pytest.mark.parametrize(
+    "sensor_payload",
+    [
+        {
             "0": {
                 "config": {
                     "battery": 25,
@@ -937,10 +934,11 @@ async def test_no_mode_no_state(
                 "uniqueid": "00:24:46:00:00:11:6f:56-01-0201",
             }
         }
-    }
-    with patch.dict(DECONZ_WEB_REQUEST, data):
-        config_entry = await setup_deconz_integration(hass, aioclient_mock)
-
+    ],
+)
+@pytest.mark.usefixtures("config_entry_setup")
+async def test_no_mode_no_state(hass: HomeAssistant) -> None:
+    """Test that a climate device without mode and state works."""
     assert len(hass.states.async_all()) == 2
 
     climate_thermostat = hass.states.get("climate.zen_01")
@@ -949,16 +947,11 @@ async def test_no_mode_no_state(
     assert climate_thermostat.attributes["preset_mode"] is DECONZ_PRESET_AUTO
     assert climate_thermostat.attributes["hvac_action"] is HVACAction.IDLE
 
-    # Verify service calls
-    mock_deconz_put_request(aioclient_mock, config_entry.data, "/sensors/0/config")
 
-
-async def test_boost_mode(
-    hass: HomeAssistant, aioclient_mock: AiohttpClientMocker, mock_deconz_websocket
-) -> None:
-    """Test that a climate device with boost mode and different state works."""
-    data = {
-        "sensors": {
+@pytest.mark.parametrize(
+    "sensor_payload",
+    [
+        {
             "0": {
                 "config": {
                     "battery": 58,
@@ -992,9 +985,11 @@ async def test_boost_mode(
                 "uniqueid": "84:fd:27:ff:fe:8a:eb:89-01-0201",
             }
         }
-    }
-    with patch.dict(DECONZ_WEB_REQUEST, data):
-        config_entry = await setup_deconz_integration(hass, aioclient_mock)
+    ],
+)
+@pytest.mark.usefixtures("config_entry_setup")
+async def test_boost_mode(hass: HomeAssistant, mock_deconz_websocket) -> None:
+    """Test that a climate device with boost mode and different state works."""
 
     assert len(hass.states.async_all()) == 3
 
@@ -1021,6 +1016,3 @@ async def test_boost_mode(
     climate_thermostat = hass.states.get("climate.thermostat")
     assert climate_thermostat.attributes["preset_mode"] is PRESET_BOOST
     assert climate_thermostat.attributes["hvac_action"] is HVACAction.HEATING
-
-    # Verify service calls
-    mock_deconz_put_request(aioclient_mock, config_entry.data, "/sensors/0/config")
