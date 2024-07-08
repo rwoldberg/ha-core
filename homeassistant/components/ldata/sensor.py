@@ -175,7 +175,7 @@ async def async_setup_entry(
         async_add_entities([total_sensor])
 
 
-class LDATADailyUsageSensor(LDATAEntity):
+class LDATADailyUsageSensor(LDATAEntity, SensorEntity):
     """Sensor that tracks daily usage for an LDATA device."""
 
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
@@ -287,7 +287,7 @@ class LDATADailyUsageSensor(LDATAEntity):
         self.async_write_ha_state()
 
 
-class LDATACTDailyUsageSensor(LDATACTEntity):
+class LDATACTDailyUsageSensor(LDATACTEntity, SensorEntity):
     """Sensor that tracks daily usage for an LDATA device."""
 
     _attr_state_class = SensorStateClass.TOTAL_INCREASING
