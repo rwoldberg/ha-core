@@ -27,9 +27,9 @@ from homeassistant.helpers.typing import StateType
 from homeassistant.util import dt as dt_util
 
 from .const import DOMAIN, LOGGER_NAME
+from .coordinator import LDATAUpdateCoordinator
 from .ldata_ct_entity import LDATACTEntity
 from .ldata_entity import LDATAEntity
-from .ldata_uppdate_coordinator import LDATAUpdateCoordinator
 
 _LOGGER = logging.getLogger(LOGGER_NAME)
 

@@ -21,7 +21,7 @@ from .const import (
     UPDATE_INTERVAL,
     UPDATE_INTERVAL_DEFAULT,
 )
-from .ldata_uppdate_coordinator import LDATAUpdateCoordinator
+from .coordinator import LDATAUpdateCoordinator
 
 PLATFORMS: list[Platform] = [Platform.BINARY_SENSOR, Platform.SENSOR, Platform.SWITCH]
 
@@ -47,6 +47,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     read_only = entry.options.get(
         READ_ONLY, entry.data.get(READ_ONLY, READ_ONLY_DEFAULT)
     )
+
+    # Don't update more that every 30 seconds.
+    update_interval = max(update_interval, 30)
+
     _LOGGER.debug("LDATA update interval: %d", update_interval)
     _LOGGER.debug("LDATA three phase: %d", three_phase)
     _LOGGER.debug("LDATA read only: %d", read_only)
