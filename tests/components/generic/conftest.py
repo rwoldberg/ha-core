@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from io import BytesIO
 from unittest.mock import AsyncMock, MagicMock, Mock, _patch, patch
 
@@ -51,27 +52,37 @@ def fakeimgbytes_gif() -> bytes:
 
 
 @pytest.fixture
-def fakeimg_png(fakeimgbytes_png: bytes) -> None:
+def fakeimg_png(fakeimgbytes_png: bytes) -> Generator[None]:
     """Set up respx to respond to test url with fake image bytes."""
-    respx.get("http://127.0.0.1/testurl/1").respond(stream=fakeimgbytes_png)
+    respx.get("http://127.0.0.1/testurl/1", name="fake_img").respond(
+        stream=fakeimgbytes_png
+    )
+    yield
+    respx.pop("fake_img")
 
 
 @pytest.fixture
-def fakeimg_gif(fakeimgbytes_gif: bytes) -> None:
+def fakeimg_gif(fakeimgbytes_gif: bytes) -> Generator[None]:
     """Set up respx to respond to test url with fake image bytes."""
-    respx.get("http://127.0.0.1/testurl/1").respond(stream=fakeimgbytes_gif)
+    respx.get("http://127.0.0.1/testurl/1", name="fake_img").respond(
+        stream=fakeimgbytes_gif
+    )
+    yield
+    respx.pop("fake_img")
 
 
-@pytest.fixture(scope="package")
-def mock_create_stream() -> _patch[MagicMock]:
+@pytest.fixture
+def mock_create_stream(hass: HomeAssistant) -> _patch[MagicMock]:
     """Mock create stream."""
-    mock_stream = Mock()
+    mock_stream = MagicMock()
+    mock_stream.hass = hass
     mock_provider = Mock()
     mock_provider.part_recv = AsyncMock()
     mock_provider.part_recv.return_value = True
     mock_stream.add_provider.return_value = mock_provider
     mock_stream.start = AsyncMock()
     mock_stream.stop = AsyncMock()
+    mock_stream.endpoint_url.return_value = "http://127.0.0.1/nothing"
     return patch(
         "homeassistant.components.generic.config_flow.create_stream",
         return_value=mock_stream,
