@@ -413,6 +413,11 @@ class LDATAService:
                 ) + (float(panel["rmsVoltage2"]) * 0.866025403784439)
             panel_data["voltage1"] = float(panel["rmsVoltage"])
             panel_data["voltage2"] = float(panel["rmsVoltage2"])
+            panel_data["frequency1"] = float(panel["frequencyA"])
+            panel_data["frequency2"] = float(panel["frequencyB"])
+            panel_data["frequency"] = (
+                float(panel["frequencyA"]) + float(panel["frequencyB"])
+            ) / 2
             panels.append(panel_data)
             # Setup the CT list.
             if "CTs" in panel:
