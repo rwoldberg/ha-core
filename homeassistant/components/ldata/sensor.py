@@ -159,9 +159,21 @@ async def async_setup_entry(
         #     entry, entity_data, SENSOR_TYPES[3], average=True, which_leg="both"
         # )
         # async_add_entities([total_sensor])
-        paneloutput_sensor = LDATAPanelOutputSensor(entry, entity_data, SENSOR_TYPES[3])
+        paneloutput_sensor = LDATAPanelOutputSensor(
+            entry, entity_data, SENSOR_TYPES[3], which_leg="1"
+        )
         async_add_entities([paneloutput_sensor])
-        paneloutput_sensor = LDATAPanelOutputSensor(entry, entity_data, SENSOR_TYPES[1])
+        paneloutput_sensor = LDATAPanelOutputSensor(
+            entry, entity_data, SENSOR_TYPES[3], which_leg="2"
+        )
+        async_add_entities([paneloutput_sensor])
+        paneloutput_sensor = LDATAPanelOutputSensor(
+            entry, entity_data, SENSOR_TYPES[1], which_leg="1"
+        )
+        async_add_entities([paneloutput_sensor])
+        paneloutput_sensor = LDATAPanelOutputSensor(
+            entry, entity_data, SENSOR_TYPES[1], which_leg="2"
+        )
         async_add_entities([paneloutput_sensor])
         entity_data = copy.deepcopy(entity_data)
         entity_data["poles"] = 1
@@ -552,10 +564,15 @@ class LDATAPanelOutputSensor(LDATAEntity, SensorEntity):
     entity_description: SensorDescription
 
     def __init__(
-        self, coordinator: LDATAUpdateCoordinator, data, description: SensorDescription
+        self,
+        coordinator: LDATAUpdateCoordinator,
+        data,
+        description: SensorDescription,
+        which_leg: str,
     ) -> None:
         """Init sensor."""
         self.entity_description = description
+        self.leg_to_total = which_leg
         super().__init__(data=data, coordinator=coordinator)
         self.panel_data = data
         try:
@@ -581,12 +598,14 @@ class LDATAPanelOutputSensor(LDATAEntity, SensorEntity):
     @property
     def name_suffix(self) -> str | None:
         """Suffix to append to the LDATA device's name."""
-        return self.entity_description.name
+        return str(self.entity_description.name) + " Leg " + self.leg_to_total
 
     @property
     def unique_id_suffix(self) -> str | None:
         """Suffix to append to the LDATA device's unique ID."""
-        return self.entity_description.unique_id_suffix
+        return (
+            "_leg_" + self.leg_to_total + str(self.entity_description.unique_id_suffix)
+        )
 
     @property
     def native_value(self) -> StateType:
