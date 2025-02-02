@@ -576,7 +576,9 @@ class LDATAPanelOutputSensor(LDATAEntity, SensorEntity):
         super().__init__(data=data, coordinator=coordinator)
         self.panel_data = data
         try:
-            self._state = float(self.panel_data["data"][self.entity_description.key])
+            self._state = float(
+                self.panel_data["data"][self.entity_description.key + self.leg_to_total]
+            )
         except ValueError:
             self._state = 0.0
         # Subscribe to updates.
@@ -589,7 +591,9 @@ class LDATAPanelOutputSensor(LDATAEntity, SensorEntity):
             if panels := self.coordinator.data["panels"]:
                 for panel in panels:
                     if panel["id"] == self.panel_data["id"]:
-                        self._state = panel[self.entity_description.key]
+                        self._state = panel[
+                            self.entity_description.key + self.leg_to_total
+                        ]
                         break
         except KeyError:
             self._state = None
