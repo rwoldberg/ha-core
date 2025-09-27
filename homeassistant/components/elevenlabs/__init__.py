@@ -6,11 +6,16 @@ from dataclasses import dataclass
 
 from elevenlabs import AsyncElevenLabs, Model
 from elevenlabs.core import ApiError
+from httpx import ConnectError
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_API_KEY, Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryError
+from homeassistant.exceptions import (
+    ConfigEntryAuthFailed,
+    ConfigEntryError,
+    ConfigEntryNotReady,
+)
 from homeassistant.helpers.httpx_client import get_async_client
 
 from .const import CONF_MODEL
@@ -20,7 +25,8 @@ PLATFORMS: list[Platform] = [Platform.TTS]
 
 async def get_model_by_id(client: AsyncElevenLabs, model_id: str) -> Model | None:
     """Get ElevenLabs model from their API by the model_id."""
-    models = await client.models.get_all()
+    models = await client.models.list()
+
     for maybe_model in models:
         if maybe_model.model_id == model_id:
             return maybe_model
@@ -48,6 +54,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ElevenLabsConfigEntry) -
     model_id = entry.options[CONF_MODEL]
     try:
         model = await get_model_by_id(client, model_id)
+    except ConnectError as err:
+        raise ConfigEntryNotReady("Failed to connect") from err
     except ApiError as err:
         raise ConfigEntryAuthFailed("Auth failed") from err
 

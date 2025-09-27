@@ -12,7 +12,7 @@ from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 
 from . import get_hub
 from .const import CONF_FANS
-from .entity import BaseSwitch
+from .entity import ModbusToggleEntity
 from .modbus import ModbusHub
 
 PARALLEL_UPDATES = 1
@@ -25,17 +25,13 @@ async def async_setup_platform(
     discovery_info: DiscoveryInfoType | None = None,
 ) -> None:
     """Read configuration and create Modbus fans."""
-    if discovery_info is None:
+    if discovery_info is None or not (fans := discovery_info[CONF_FANS]):
         return
-    fans = []
-
-    for entry in discovery_info[CONF_FANS]:
-        hub: ModbusHub = get_hub(hass, discovery_info[CONF_NAME])
-        fans.append(ModbusFan(hass, hub, entry))
-    async_add_entities(fans)
+    hub = get_hub(hass, discovery_info[CONF_NAME])
+    async_add_entities(ModbusFan(hass, hub, config) for config in fans)
 
 
-class ModbusFan(BaseSwitch, FanEntity):
+class ModbusFan(ModbusToggleEntity, FanEntity):
     """Class representing a Modbus fan."""
 
     def __init__(

@@ -5,7 +5,7 @@ from functools import lru_cache
 import logging
 import os
 from pathlib import Path
-import sys
+import socket
 from unittest.mock import patch
 
 from freezegun.api import FrozenDateTimeFactory
@@ -19,6 +19,7 @@ from homeassistant.components.profiler import (
     CONF_ENABLED,
     CONF_SECONDS,
     SERVICE_DUMP_LOG_OBJECTS,
+    SERVICE_DUMP_SOCKETS,
     SERVICE_LOG_CURRENT_TASKS,
     SERVICE_LOG_EVENT_LOOP_SCHEDULED,
     SERVICE_LOG_THREAD_FRAMES,
@@ -35,7 +36,7 @@ from homeassistant.components.profiler.const import DOMAIN
 from homeassistant.const import CONF_SCAN_INTERVAL, CONF_TYPE
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
-import homeassistant.util.dt as dt_util
+from homeassistant.util import dt as dt_util
 
 from tests.common import MockConfigEntry, async_fire_time_changed
 
@@ -71,9 +72,6 @@ async def test_basic_usage(hass: HomeAssistant, tmp_path: Path) -> None:
     await hass.async_block_till_done()
 
 
-@pytest.mark.skipif(
-    sys.version_info >= (3, 13), reason="not yet available on Python 3.13"
-)
 async def test_memory_usage(hass: HomeAssistant, tmp_path: Path) -> None:
     """Test we can setup and the service is registered."""
     test_dir = tmp_path / "profiles"
@@ -103,24 +101,6 @@ async def test_memory_usage(hass: HomeAssistant, tmp_path: Path) -> None:
 
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
-
-
-@pytest.mark.skipif(sys.version_info < (3, 13), reason="still works on python 3.12")
-async def test_memory_usage_py313(hass: HomeAssistant, tmp_path: Path) -> None:
-    """Test raise an error on python3.13."""
-    entry = MockConfigEntry(domain=DOMAIN)
-    entry.add_to_hass(hass)
-
-    assert await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-    assert hass.services.has_service(DOMAIN, SERVICE_MEMORY)
-    with pytest.raises(
-        HomeAssistantError,
-        match="Memory profiling is not supported on Python 3.13. Please use Python 3.12.",
-    ):
-        await hass.services.async_call(
-            DOMAIN, SERVICE_MEMORY, {CONF_SECONDS: 0.000001}, blocking=True
-        )
 
 
 async def test_object_growth_logging(
@@ -291,6 +271,36 @@ async def test_log_scheduled(
 
     assert await hass.config_entries.async_unload(entry.entry_id)
     await hass.async_block_till_done()
+
+
+@pytest.mark.usefixtures("socket_enabled")
+async def test_dump_sockets(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Test dumping of sockets to the log."""
+    entry = MockConfigEntry(domain=DOMAIN)
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    caplog.clear()
+
+    sock = None
+    try:
+        # Try to bind ephemeral UDP port on localhost for testing
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+
+        assert hass.services.has_service(DOMAIN, SERVICE_DUMP_SOCKETS)
+        await hass.services.async_call(DOMAIN, SERVICE_DUMP_SOCKETS, blocking=True)
+    finally:
+        if sock:
+            sock.close()
+
+    assert "Sockets used by Home Assistant" in caplog.text
+    assert f"laddr=('127.0.0.1', {port})" in caplog.text
 
 
 async def test_lru_stats(hass: HomeAssistant, caplog: pytest.LogCaptureFixture) -> None:

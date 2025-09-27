@@ -14,7 +14,7 @@ from deebot_client.events import (
     station,
 )
 import pytest
-from syrupy import SnapshotAssertion
+from syrupy.assertion import SnapshotAssertion
 
 from homeassistant.components.ecovacs.const import DOMAIN
 from homeassistant.components.ecovacs.controller import EcovacsController
@@ -46,7 +46,7 @@ async def notify_events(hass: HomeAssistant, event_bus: EventBus):
     event_bus.notify(LifeSpanEvent(LifeSpan.FILTER, 56, 40 * 60))
     event_bus.notify(LifeSpanEvent(LifeSpan.SIDE_BRUSH, 40, 20 * 60))
     event_bus.notify(ErrorEvent(0, "NoError: Robot is operational"))
-    event_bus.notify(station.StationEvent(station.State.EMPTYING))
+    event_bus.notify(station.StationEvent(station.State.EMPTYING_DUSTBIN))
     await block_till_done(hass, event_bus)
 
 
@@ -172,9 +172,9 @@ async def test_disabled_by_default_sensors(
     for entity_id in entity_ids:
         assert not hass.states.get(entity_id)
 
-        assert (
-            entry := entity_registry.async_get(entity_id)
-        ), f"Entity registry entry for {entity_id} is missing"
+        assert (entry := entity_registry.async_get(entity_id)), (
+            f"Entity registry entry for {entity_id} is missing"
+        )
         assert entry.disabled
         assert entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION
 
